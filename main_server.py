@@ -3837,24 +3837,8 @@ async def get_local_workshop_item(item_id: str, folder_path: str = None):
                 decoded_folder_path = decoded_folder_path[2:]  # 移除多余的反斜杠前缀
         else:
             decoded_folder_path = unquote(folder_path)
-        
-        # 关键修复：将相对路径转换为基于基础目录的绝对路径
-        # 确保路径是绝对路径，如果不是则视为相对路径
-        if not os.path.isabs(decoded_folder_path):
-            # 将相对路径转换为基于基础目录的绝对路径
-            full_path = os.path.join(base_workshop_folder, decoded_folder_path)
-        else:
-            # 如果已经是绝对路径，仍然确保它在基础目录内（安全检查）
-            full_path = decoded_folder_path
-            # 标准化路径
-            full_path = os.path.normpath(full_path)
-            
-        # 安全检查：验证路径是否在基础目录内
-        if not full_path.startswith(base_workshop_folder):
-            logger.warning(f'路径遍历尝试被拒绝: {folder_path}')
-            return JSONResponse(content={"success": False, "error": "访问被拒绝: 路径不在允许的范围内"}, status_code=403)
-        
-        folder_path = full_path
+                    
+        folder_path = decoded_folder_path
         logger.info(f'处理后的完整路径: {folder_path}')
         
         # 解析本地ID
@@ -3921,9 +3905,6 @@ async def check_upload_status(item_path: str = None):
                 "error": "未提供物品文件夹路径"
             }, status_code=400)
         
-        # 安全检查：使用get_workshop_path()作为基础目录
-        base_workshop_folder = os.path.abspath(os.path.normpath(get_workshop_path()))
-        
         # Windows路径处理：确保路径分隔符正确
         if os.name == 'nt':  # Windows系统
             # 解码并处理Windows路径
@@ -3936,20 +3917,8 @@ async def check_upload_status(item_path: str = None):
         else:
             decoded_item_path = unquote(item_path)
         
-        # 将相对路径转换为基于基础目录的绝对路径
-        if not os.path.isabs(decoded_item_path):
-            full_path = os.path.join(base_workshop_folder, decoded_item_path)
-        else:
-            full_path = decoded_item_path
-            full_path = os.path.normpath(full_path)
-        
-        # 安全检查：验证路径是否在基础目录内
-        if not full_path.startswith(base_workshop_folder):
-            logger.warning(f'路径遍历尝试被拒绝: {item_path}')
-            return JSONResponse(content={"success": False, "error": "访问被拒绝: 路径不在允许的范围内"}, status_code=403)
-        
         # 验证路径存在性
-        if not os.path.exists(full_path) or not os.path.isdir(full_path):
+        if not os.path.exists(decoded_item_path) or not os.path.isdir(decoded_item_path):
             return JSONResponse(content={
                 "success": False,
                 "error": "无效的物品文件夹路径"
@@ -3959,7 +3928,7 @@ async def check_upload_status(item_path: str = None):
         import glob
         import re
         
-        upload_files = glob.glob(os.path.join(full_path, "steam_workshop_id_*.txt"))
+        upload_files = glob.glob(os.path.join(decoded_item_path, "steam_workshop_id_*.txt"))
         
         # 提取第一个找到的物品ID
         published_file_id = None

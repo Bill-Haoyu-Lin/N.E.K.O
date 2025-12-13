@@ -1553,10 +1553,19 @@
 
                         <div class="control-group">
                             <div class="control-label" data-i18n="steam.previewImagePath">预览图片路径 *</div>
-                            <input type="text" id="preview-image" class="control-input" placeholder="从本地物品中获取的预览图片路径"
-                                readonly>
-                            <div class="control-hint" style="color: red; font-size: 14px;"
-                                data-i18n="steam.previewImageSizeHint">提示：预览图片大小需要小于1MB</div>
+                            <div class="action-group">
+                                <input type="text" id="preview-image" class="control-input"
+                                    placeholder="选择预览图片或从本地物品自动获取" readonly
+                                    data-i18n-placeholder="steam.previewImagePlaceholder">
+                                <button class="btn btn-primary" onclick="selectPreviewImage()"
+                                    data-i18n="steam.selectImage">选择图片</button>
+                            </div>
+                            <!-- 隐藏的图片文件选择输入 -->
+                            <input type="file" id="preview-image-upload" accept=".jpg,.jpeg,.png" style="display:none">
+                            <div class="control-hint"
+                                style="color: #e74c3c; font-size: 13px; margin-top: 8px; font-weight: 500;">
+                                ⚠️ <span data-i18n="steam.previewImageSizeHint">提示：Steam 预览图片大小必须小于1MB</span>
+                            </div>
                         </div>
 
                         <div class="control-group">
@@ -1640,75 +1649,7 @@
                     </div>
                 </div>
             </div>
-
-            <!-- 上传内容标签页 -->
-            <div id="upload-content" class="tab-content" style="display: none;">
-                <div class="section-card upload-section">
-                    <div class="section-header">
-                        <h2 data-i18n="steam.uploadToWorkshop">上传到创意工坊</h2>
-                    </div>
-                    <div class="info-box">
-                        <p data-i18n="steam.uploadTip">💡 您可以在"管理本地物品"中选择物品自动填充路径，也可以直接手动输入内容文件夹和预览图片的完整路径。</p>
-                    </div>
-
-                    <div id="message-area"></div>
-
-                    <div class="control-group">
-                        <div class="control-label" data-i18n="steam.title">标题 *</div>
-                        <input type="text" id="item-title" class="control-input" placeholder="输入您的创作标题"
-                            data-i18n-placeholder="steam.titlePlaceholder">
-                    </div>
-
-                    <div class="control-group">
-                        <div class="control-label" data-i18n="steam.description">描述</div>
-                        <textarea id="item-description" class="control-input" placeholder="详细描述您的创作内容..."
-                            data-i18n-placeholder="steam.descriptionPlaceholder"></textarea>
-                    </div>
-
-                    <div class="control-group">
-                        <div class="control-label" data-i18n="steam.contentFolderPath">内容文件夹路径 *</div>
-                        <input type="text" id="content-folder" class="control-input" placeholder="从本地物品中获取的内容文件夹路径"
-                            readonly data-i18n-placeholder="steam.contentFolderPlaceholder">
-                    </div>
-
-                    <div class="control-group">
-                        <div class="control-label" data-i18n="steam.previewImagePath">预览图片路径 *</div>
-                        <div class="action-group">
-                            <input type="text" id="preview-image" class="control-input" placeholder="从本地物品中获取的预览图片路径"
-                                readonly data-i18n-placeholder="steam.previewImagePlaceholder">
-                            <button class="btn btn-secondary" onclick="selectPreviewImage()"
-                                data-i18n="steam.selectImage">选择图片</button>
-                        </div>
-                        <!-- 隐藏的图片文件选择输入 -->
-                        <input type="file" id="preview-image-upload" accept=".jpg,.jpeg,.png" style="display:none">
-                        <div class="control-hint" style="color: red; font-size: 14px;"
-                            data-i18n="steam.previewImageSizeHint">提示：预览图片大小需要小于1MB</div>
-                    </div>
-
-                    <div class="control-group">
-                        <div class="control-label" data-i18n="steam.tags">标签</div>
-                        <input type="text" id="item-tags" class="control-input" placeholder="输入标签，按回车添加"
-                            data-i18n-placeholder="steam.tagsPlaceholder">
-                        <div id="tags-container" class="tags-container"></div>
-                    </div>
-
-                    <div class="control-group checkbox">
-                        <div class="checkbox-label">允许评论</div>
-                        <input type="checkbox" id="allow-comments" checked>
-                    </div>
-
-                    <div class="button-group">
-                        <button class="btn btn-primary" onclick="uploadItem()">上传到创意工坊</button>
-                    </div>
-                    <div class="help-text" style="margin-top: 10px; font-size: 12px; color: #666;">
-                        点击"上传"即表示您同意 Steam 创意工坊服务条款，包括创意工坊法律协议：
-                        <a href="https://steamcommunity.com/sharedfiles/workshoplegalagreement" target="_blank"
-                            style="color: #44b7fe;">https://steamcommunity.com/sharedfiles/workshoplegalagreement</a>
-                    </div>
-                </div>
-            </div>
         </div>
-    </div>
     </div>
 
     <!-- 物品详情模态框 -->
@@ -3615,6 +3556,11 @@
 
         // 初始化页面 - 需要等待 i18n 加载完成
         function initPage() {
+            // 确保所有 data-i18n 和 data-i18n-placeholder 属性被翻译
+            if (typeof window.updatePageTexts === 'function') {
+                window.updatePageTexts();
+            }
+
             // 初始化时添加一些示例标签
             addTag(window.t ? window.t('steam.defaultTagMod') : 'Mod');
             addTag(window.t ? window.t('steam.defaultTagCharacter') : 'Character');

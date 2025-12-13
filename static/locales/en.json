@@ -62,9 +62,9 @@
     "contentFolderPath": "Content Folder Path *",
     "contentFolderPlaceholder": "Content folder path obtained from local items",
     "previewImagePath": "Preview Image Path *",
-    "previewImagePlaceholder": "Preview image path obtained from local items",
-    "previewImageSizeHint": "Note: Preview image size should be less than 1MB",
-    "uploadInstructions": "Please select an unpublished item in the 'Manage Local Items' section first, then click the 'Prepare Upload' button. The content folder path and preview image path will be automatically populated.",
+    "previewImagePlaceholder": "Select preview image or auto-obtain from local items",
+    "previewImageSizeHint": "Note: Steam preview image size must be less than 1MB",
+    "uploadInstructions": "Please select an unpublished item in the 'Manage Local Items' section first, then click the 'Upload to Workshop' button. The content folder path and preview image path will be automatically populated.",
     "unnamedItem": "Unnamed Item",
     "localItem": "Local Item",
     "unknownItem": "Unknown Item",
@@ -194,7 +194,10 @@
     "previewImageUploaded": "Preview image selected",
     "previewImageUploadFailed": "Upload failed: {{error}}",
     "previewImageUploadError": "Upload error: {{error}}",
-    "previewImageTooLarge": "Preview image must be smaller than 1MB"
+    "previewImageTooLarge": "Preview image must be smaller than 1MB",
+    "allowComments": "Allow Comments",
+    "uploadToWorkshopBtn": "Upload to Workshop",
+    "uploadAgreementText": "By clicking \"Upload\" you agree to the Steam Workshop Terms of Service, including the Workshop Legal Agreement:"
   },
   "dialogs": {
     "confirmLeave": "Confirm Leave",
