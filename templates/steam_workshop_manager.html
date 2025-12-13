@@ -3120,7 +3120,7 @@
                     subscribedDate: item.timeAdded ? new Date(item.timeAdded * 1000).toLocaleDateString() : (window.t ? window.t('steam.unknownDate') : '未知日期'),
                     lastUpdated: item.timeUpdated ? new Date(item.timeUpdated * 1000).toLocaleDateString() : (window.t ? window.t('steam.unknownDate') : '未知日期'),
                     size: formatFileSize(item.fileSizeOnDisk || item.fileSize || 0),
-                    previewUrl: item.previewImageUrl || '../static/icons/Steam_icon_logo.png',
+                    previewUrl: item.previewUrl || item.previewImageUrl || '../static/icons/Steam_icon_logo.png',
                     state: item.state || {},
                     // 添加安装路径信息
                     installedFolder: item.installedFolder || '',
@@ -3147,7 +3147,7 @@
                 return `
                     <div class="workshop-card">
                         <div class="card-header">
-                            <img src="${formattedItem.installedFolder ? `/api/proxy-image?image_path=${encodeURIComponent(formattedItem.installedFolder + '/preview.png')}` : `/api/proxy-image?image_path=${encodeURIComponent(formattedItem.previewUrl)}`}" alt="${formattedItem.name}" class="card-image">
+                            <img src="${formattedItem.previewUrl.startsWith('/api/') ? formattedItem.previewUrl : `/api/proxy-image?image_path=${encodeURIComponent(formattedItem.previewUrl)}`}" alt="${formattedItem.name}" class="card-image" onerror="this.src='../static/icons/Steam_icon_logo.png'">
                             <div class="status-badge ${statusClass}">${statusText}</div>
                         </div>
                         <div class="card-content">
@@ -3435,7 +3435,7 @@
 
                     const detailContent = document.getElementById('itemDetailContent');
                     detailContent.innerHTML = `
-                <img src="${formattedItem.installedFolder ? `/api/proxy-image?image_path=${encodeURIComponent(formattedItem.installedFolder + '/preview.png')}` : `/api/proxy-image?image_path=${encodeURIComponent(formattedItem.previewUrl)}`}" alt="${formattedItem.name}" class="item-preview-large">
+                <img src="${formattedItem.previewUrl.startsWith('/api/') ? formattedItem.previewUrl : `/api/proxy-image?image_path=${encodeURIComponent(formattedItem.previewUrl)}`}" alt="${formattedItem.name}" class="item-preview-large" onerror="this.src='../static/icons/Steam_icon_logo.png'">
                 
                 <div class="item-info-grid">
                     <p class="item-info-item">

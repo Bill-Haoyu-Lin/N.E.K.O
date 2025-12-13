@@ -530,12 +530,21 @@ async def get_live2d_models(simple: bool = False):
                     installed_folder = item.get('installedFolder')
                     # 从publishedFileId字段获取物品ID，而不是item_id
                     item_id = item.get('publishedFileId')
+                    # 获取物品标题用于显示
+                    item_title = item.get('title', '')
                     
                     if installed_folder and os.path.exists(installed_folder) and os.path.isdir(installed_folder) and item_id:
+                        logger.debug(f"检查创意工坊物品: id={item_id}, title={item_title}, folder={installed_folder}")
+                        
                         # 检查安装目录下是否有.model3.json文件
                         for filename in os.listdir(installed_folder):
                             if filename.endswith('.model3.json'):
                                 model_name = os.path.splitext(os.path.splitext(filename)[0])[0]
+                                
+                                # 跳过纯数字模型名（这通常是错误的配置，使用了Steam ID而不是真正的模型名）
+                                if model_name.isdigit():
+                                    logger.warning(f"跳过纯数字模型名: {model_name} (可能是Steam ID)，请检查创意工坊物品内容")
+                                    continue
                                 
                                 # 避免重复添加
                                 if model_name not in [m['name'] for m in models]:
@@ -544,8 +553,12 @@ async def get_live2d_models(simple: bool = False):
                                     logger.debug(f"添加模型路径: {path_value!r}, item_id类型: {type(item_id)}, filename类型: {type(filename)}")
                                     # 移除可能的额外引号
                                     path_value = path_value.strip('"')
+                                    # 确定display_name：优先使用物品标题
+                                    display_name = item_title if item_title and not item_title.startswith('未知物品_') else model_name
+                                    logger.info(f"添加创意工坊模型: name={model_name}, display_name={display_name}, item_title={item_title}")
                                     models.append({
                                         'name': model_name,
+                                        'display_name': display_name,
                                         'path': path_value,
                                         'source': 'steam_workshop',
                                         'item_id': item_id
@@ -556,6 +569,12 @@ async def get_live2d_models(simple: bool = False):
                             subdir_path = os.path.join(installed_folder, subdir)
                             if os.path.isdir(subdir_path):
                                 model_name = subdir
+                                
+                                # 跳过纯数字子目录名
+                                if model_name.isdigit():
+                                    logger.debug(f"跳过纯数字子目录: {model_name}")
+                                    continue
+                                    
                                 json_file = os.path.join(subdir_path, f'{model_name}.model3.json')
                                 if os.path.exists(json_file):
                                     # 避免重复添加
@@ -567,6 +586,7 @@ async def get_live2d_models(simple: bool = False):
                                         path_value = path_value.strip('"')
                                         models.append({
                                             'name': model_name,
+                                            'display_name': item_title if item_title and not item_title.startswith('未知物品_') else model_name,
                                             'path': path_value,
                                             'source': 'steam_workshop',
                                             'item_id': item_id
@@ -1854,10 +1874,12 @@ async def get_subscribed_workshop_items():
                 # 尝试获取预览图信息 - 优先从本地文件夹查找
                 preview_url = None
                 install_folder = item_info.get('installedFolder')
+                logger.info(f'物品 {item_id} 安装文件夹: {install_folder}')
                 if install_folder and os.path.exists(install_folder):
                     try:
                         # 使用辅助函数查找预览图
                         preview_image_path = find_preview_image_in_folder(install_folder)
+                        logger.info(f'物品 {item_id} 查找到的预览图路径: {preview_image_path}')
                         if preview_image_path:
                             # 为前端提供代理访问的路径格式
                             # 需要将路径标准化，确保可以通过proxy-image API访问
@@ -1867,17 +1889,24 @@ async def get_subscribed_workshop_items():
                             else:
                                 proxy_path = preview_image_path
                             preview_url = f"/api/proxy-image?image_path={quote(proxy_path)}"
-                            logger.debug(f'为物品 {item_id} 找到本地预览图: {preview_url}')
+                            logger.info(f'为物品 {item_id} 生成预览图URL: {preview_url}')
+                        else:
+                            logger.warning(f'物品 {item_id} 在文件夹 {install_folder} 中未找到预览图')
                     except Exception as preview_error:
                         logger.warning(f'查找物品 {item_id} 预览图时出错: {preview_error}')
+                else:
+                    logger.warning(f'物品 {item_id} 没有安装文件夹或文件夹不存在: {install_folder}')
                 
                 # 添加预览图URL到物品信息
                 if preview_url:
                     item_info['previewUrl'] = preview_url
+                    logger.info(f'物品 {item_id} 已设置 previewUrl: {preview_url}')
+                else:
+                    logger.warning(f'物品 {item_id} 没有找到预览图，previewUrl 未设置')
                 
                 # 添加物品信息到结果列表
                 items_info.append(item_info)
-                logger.debug(f'物品 {item_id} 信息已添加到结果列表: {item_info["title"]}')
+                logger.info(f'物品 {item_id} 信息已添加到结果列表: {item_info["title"]}, previewUrl={item_info.get("previewUrl", "未设置")}')
                 
             except Exception as item_error:
                 logger.error(f"获取物品 {item_id} 信息时出错: {item_error}")
@@ -3787,7 +3816,7 @@ async def proxy_image(image_path: str):
             return JSONResponse(content={"success": False, "error": f"文件不存在或无访问权限: {decoded_path}"}, status_code=404)
         
         # 检查文件扩展名是否为图片
-        image_extensions = ['.jpg', '.jpeg', '.png', '.gif', '.bmp', '.webp']
+        image_extensions = ['.jpg', '.jpeg', '.png', '.gif', '.bmp', '.webp', '.ico']
         if os.path.splitext(final_path)[1].lower() not in image_extensions:
             return JSONResponse(content={"success": False, "error": "不是有效的图片文件"}, status_code=400)
         
@@ -3803,7 +3832,8 @@ async def proxy_image(image_path: str):
             '.png': 'image/png',
             '.gif': 'image/gif',
             '.bmp': 'image/bmp',
-            '.webp': 'image/webp'
+            '.webp': 'image/webp',
+            '.ico': 'image/x-icon'
         }.get(ext, 'application/octet-stream')
         
         # 返回图片数据
@@ -4591,17 +4621,36 @@ def get_folder_size(folder_path):
     return total_size
 
 def find_preview_image_in_folder(folder_path):
-    """在文件夹中查找预览图片，只查找指定的8个图片名称"""
-    # 按优先级顺序查找指定的图片文件列表
-    preview_image_names = ['preview.jpg', 'preview.png', 'thumbnail.jpg', 'thumbnail.png', 
-                         'icon.jpg', 'icon.png', 'header.jpg', 'header.png']
+    """在文件夹中查找预览图片，只查找指定的图片名称"""
+    # 按优先级顺序查找指定的图片文件列表（包含更多扩展名格式）
+    preview_image_names = [
+        'preview.jpg', 'preview.jpeg', 'preview.png', 
+        'thumbnail.jpg', 'thumbnail.jpeg', 'thumbnail.png', 
+        'icon.jpg', 'icon.jpeg', 'icon.png', 'icon.ico',
+        'header.jpg', 'header.jpeg', 'header.png',
+        'cover.jpg', 'cover.jpeg', 'cover.png'
+    ]
+    
+    logger.debug(f'在文件夹 {folder_path} 中查找预览图')
     
     for image_name in preview_image_names:
         image_path = os.path.join(folder_path, image_name)
         if os.path.exists(image_path) and os.path.isfile(image_path):
+            logger.debug(f'找到预览图: {image_path}')
             return image_path
     
-    # 如果找不到指定的图片名称，返回None
+    # 如果找不到指定的图片名称，尝试查找任何图片文件
+    try:
+        for file in os.listdir(folder_path):
+            if file.lower().endswith(('.jpg', '.jpeg', '.png', '.gif', '.webp', '.ico')):
+                image_path = os.path.join(folder_path, file)
+                if os.path.isfile(image_path):
+                    logger.debug(f'使用备选预览图: {image_path}')
+                    return image_path
+    except Exception as e:
+        logger.warning(f'遍历文件夹 {folder_path} 时出错: {e}')
+    
+    logger.debug(f'在文件夹 {folder_path} 中未找到任何预览图')
     return None
 
 @app.get('/live2d_emotion_manager', response_class=HTMLResponse)
