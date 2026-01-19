@@ -26,7 +26,7 @@ logger = logging.getLogger("Main")
 
 
 @router.get("/models")
-def get_live2d_models(simple: bool = False):
+async def get_live2d_models(simple: bool = False):
     """
     获取Live2D模型列表
     Args:
@@ -38,7 +38,7 @@ def get_live2d_models(simple: bool = False):
         
         # 再获取Steam创意工坊模型
         try:
-            workshop_items_result = get_subscribed_workshop_items()
+            workshop_items_result = await get_subscribed_workshop_items()
             
             # 处理响应结果
             if isinstance(workshop_items_result, dict) and workshop_items_result.get('success', False):
@@ -47,9 +47,8 @@ def get_live2d_models(simple: bool = False):
                 
                 # 遍历所有物品，提取已安装的模型
                 for item in items:
-                    # 直接使用get_subscribed_workshop_items返回的installedFolder
+                    # 直接使用get_subscribed_workshop_items返回的installedFolder；从publishedFileId字段获取物品ID，而不是item_id
                     installed_folder = item.get('installedFolder')
-                    # 从publishedFileId字段获取物品ID，而不是item_id
                     item_id = item.get('publishedFileId')
                     
                     if installed_folder and os.path.exists(installed_folder) and os.path.isdir(installed_folder) and item_id:
@@ -60,10 +59,9 @@ def get_live2d_models(simple: bool = False):
                                 
                                 # 避免重复添加
                                 if model_name not in [m['name'] for m in models]:
-                                    # 构建正确的/workshop URL路径，确保没有多余的引号
+                                    # 构建正确的/workshop URL路径，确保没有多余的引号；移除可能的额外引号
                                     path_value = f'/workshop/{item_id}/{filename}'
                                     logger.debug(f"添加模型路径: {path_value!r}, item_id类型: {type(item_id)}, filename类型: {type(filename)}")
-                                    # 移除可能的额外引号
                                     path_value = path_value.strip('"')
                                     models.append({
                                         'name': model_name,
@@ -81,10 +79,9 @@ def get_live2d_models(simple: bool = False):
                                 if os.path.exists(json_file):
                                     # 避免重复添加
                                     if model_name not in [m['name'] for m in models]:
-                                        # 构建正确的/workshop URL路径，确保没有多余的引号
+                                        # 构建正确的/workshop URL路径，确保没有多余的引号；移除可能的额外引号
                                         path_value = f'/workshop/{item_id}/{model_name}/{model_name}.model3.json'
                                         logger.debug(f"添加子目录模型路径: {path_value!r}, item_id类型: {type(item_id)}, model_name类型: {type(model_name)}")
-                                        # 移除可能的额外引号
                                         path_value = path_value.strip('"')
                                         models.append({
                                             'name': model_name,
@@ -115,7 +112,7 @@ def get_model_config(model_name: str):
     try:
         # 查找模型目录（可能在static或用户文档目录）
         model_dir, url_prefix = find_model_directory(model_name)
-        if not os.path.exists(model_dir):
+        if not model_dir or not os.path.exists(model_dir):
             return JSONResponse(status_code=404, content={"success": False, "error": "模型目录不存在"})
         
         # 查找.model3.json文件
@@ -169,7 +166,7 @@ async def update_model_config(model_name: str, request: Request):
         
         # 查找模型目录（可能在static或用户文档目录）
         model_dir, url_prefix = find_model_directory(model_name)
-        if not os.path.exists(model_dir):
+        if not model_dir or not os.path.exists(model_dir):
             return JSONResponse(status_code=404, content={"success": False, "error": "模型目录不存在"})
         
         # 查找.model3.json文件
@@ -208,7 +205,7 @@ def get_emotion_mapping(model_name: str):
     try:
         # 查找模型目录（可能在static或用户文档目录）
         model_dir, url_prefix = find_model_directory(model_name)
-        if not os.path.exists(model_dir):
+        if not model_dir or not os.path.exists(model_dir):
             return JSONResponse(status_code=404, content={"success": False, "error": "模型目录不存在"})
         
         # 查找.model3.json文件
@@ -280,7 +277,7 @@ async def update_emotion_mapping(model_name: str, request: Request):
 
         # 查找模型目录（可能在static或用户文档目录）
         model_dir, url_prefix = find_model_directory(model_name)
-        if not os.path.exists(model_dir):
+        if not model_dir or not os.path.exists(model_dir):
             return JSONResponse(status_code=404, content={"success": False, "error": "模型目录不存在"})
         
         # 查找.model3.json文件
@@ -376,7 +373,7 @@ def get_model_files(model_name: str):
         # 查找模型目录（可能在static或用户文档目录）
         model_dir, url_prefix = find_model_directory(model_name)
         
-        if not os.path.exists(model_dir):
+        if not model_dir or not os.path.exists(model_dir):
             return {"success": False, "error": f"模型 {model_name} 不存在"}
         
         motion_files = []
@@ -425,7 +422,7 @@ def get_model_parameters(model_name: str):
         # 查找模型目录
         model_dir, url_prefix = find_model_directory(model_name)
         
-        if not os.path.exists(model_dir):
+        if not model_dir or not os.path.exists(model_dir):
             return {"success": False, "error": f"模型 {model_name} 不存在"}
         
         # 查找.cdi3.json文件
@@ -480,7 +477,7 @@ async def save_model_parameters(model_name: str, request: Request):
         # 查找模型目录
         model_dir, url_prefix = find_model_directory(model_name)
         
-        if not os.path.exists(model_dir):
+        if not model_dir or not os.path.exists(model_dir):
             return JSONResponse(status_code=404, content={"success": False, "error": f"模型 {model_name} 不存在"})
         
         # 获取请求体中的参数
@@ -509,7 +506,7 @@ def load_model_parameters(model_name: str):
         # 查找模型目录
         model_dir, url_prefix = find_model_directory(model_name)
         
-        if not os.path.exists(model_dir):
+        if not model_dir or not os.path.exists(model_dir):
             return {"success": False, "error": f"模型 {model_name} 不存在"}
         
         # 读取parameters.json文件
@@ -543,7 +540,7 @@ def get_model_config_by_id(model_id: str):
             model_dir = ""
             logger.warning(f"通过model_id查找失败: {e}")
 
-        if not os.path.exists(model_dir):
+        if not model_dir or not os.path.exists(model_dir):
             return JSONResponse(status_code=404, content={"success": False, "error": "模型目录不存在"})
         
         # 查找.model3.json文件
@@ -603,7 +600,7 @@ async def update_model_config_by_id(model_id: str, request: Request):
             model_dir = ""
             logger.warning(f"通过model_id查找失败: {e}")
 
-        if not os.path.exists(model_dir):
+        if not model_dir or not os.path.exists(model_dir):
             return JSONResponse(status_code=404, content={"success": False, "error": "模型目录不存在"})
         
         # 查找.model3.json文件
@@ -950,7 +947,7 @@ def open_model_directory(model_name: str):
         # 查找模型目录
         model_dir, url_prefix = find_model_directory(model_name)
         
-        if not os.path.exists(model_dir):
+        if not model_dir or not os.path.exists(model_dir):
             return JSONResponse(status_code=404, content={"success": False, "error": f"模型目录不存在: {model_dir}"})
         
         # 使用os.startfile在Windows上打开目录
@@ -963,6 +960,102 @@ def open_model_directory(model_name: str):
         return {"success": True, "message": f"已打开模型目录: {model_dir}", "directory": model_dir}
     except Exception as e:
         logger.error(f"打开模型目录失败: {e}")
+        return JSONResponse(status_code=500, content={"success": False, "error": str(e)})
+
+
+@router.delete('/model/{model_name}')
+def delete_model(model_name: str):
+    """删除指定的Live2D模型"""
+    try:
+        # 查找模型目录
+        model_dir, _url_prefix = find_model_directory(model_name)
+        
+        if not model_dir or not os.path.exists(model_dir):
+            return JSONResponse(status_code=404, content={"success": False, "error": f"模型 {model_name} 不存在"})
+        
+        # 检查是否是用户导入的模型（只能删除用户导入的模型，不能删除内置模型）
+        is_user_model = False
+        
+        # 检查是否在用户文档目录下
+        try:
+            config_mgr = get_config_manager()
+            config_mgr.ensure_live2d_directory()
+            user_live2d_dir = os.path.realpath(str(config_mgr.live2d_dir))
+            model_dir_real = os.path.realpath(model_dir)
+            try:
+                common = os.path.commonpath([user_live2d_dir, model_dir_real])
+                if common == user_live2d_dir:
+                    is_user_model = True
+            except ValueError:
+                # 不同驱动器/根目录的情况
+                pass
+        except Exception as e:
+            logger.warning(f"检查用户模型目录时出错: {e}")
+        
+        if not is_user_model:
+            return JSONResponse(status_code=403, content={"success": False, "error": "只能删除用户导入的模型，无法删除内置模型"})
+        
+        # 再次检查路径是否存在
+        if not os.path.exists(model_dir):
+            logger.info(f"模型目录不存在，视为已删除: {model_name}")
+            return {"success": True, "message": f"模型 {model_name} 已成功删除"}
+        
+        # 递归删除模型目录
+        import shutil
+        shutil.rmtree(model_dir, ignore_errors=True)
+        
+        # 验证删除是否成功
+        if os.path.exists(model_dir):
+            logger.warning(f"删除后文件夹仍存在: {model_dir}，可能被占用或权限不足")
+            return JSONResponse(status_code=500, content={"success": False, "error": f"删除模型失败，文件夹仍存在: {model_dir}"})
+        else:
+            logger.info(f"已删除Live2D模型: {model_name}")
+            return {"success": True, "message": f"模型 {model_name} 已成功删除"}
+    except Exception as e:
+        logger.error(f"删除模型失败: {e}")
+        return JSONResponse(status_code=500, content={"success": False, "error": str(e)})
+
+
+@router.get('/user_models')
+def get_user_models():
+    """获取用户导入的模型列表"""
+    try:
+        user_models = []
+        
+        # 获取用户文档目录下的live2d模型
+        try:
+            config_mgr = get_config_manager()
+            config_mgr.ensure_live2d_directory()
+            docs_live2d_dir = str(config_mgr.live2d_dir)
+            if os.path.exists(docs_live2d_dir):
+                for root, dirs, files in os.walk(docs_live2d_dir):
+                    for file in files:
+                        if file.endswith('.model3.json'):
+                            model_name = os.path.basename(root)
+                            rel_path = os.path.relpath(root, docs_live2d_dir)
+                            # Normalize '.' to empty string to avoid '/user_live2d/./' paths
+                            if rel_path == '.':
+                                rel_path_posix = ''
+                            else:
+                                rel_path_posix = pathlib.Path(rel_path).as_posix()
+                            # Build path without duplicate slash
+                            if rel_path_posix:
+                                path = f'/user_live2d/{rel_path_posix}/{file}'
+                            else:
+                                path = f'/user_live2d/{file}'
+                            user_models.append({
+                                'name': model_name,
+                                'path': path,
+                                'source': 'user_documents'
+                            })
+                            # Prune deeper traversal after finding a .model3.json
+                            dirs[:] = []
+        except Exception as e:
+            logger.warning(f"扫描用户文档模型目录时出错: {e}")
+        
+        return {"success": True, "models": user_models}
+    except Exception as e:
+        logger.error(f"获取用户模型列表失败: {e}")
         return JSONResponse(status_code=500, content={"success": False, "error": str(e)})
 
 

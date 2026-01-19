@@ -49,7 +49,6 @@ __pycache__/
 .env.test.local
 .env.production.local
 .ruff_cache
-.agent
 
 # Rust: ignore target and cargo artifacts
 /launcher/target/
@@ -99,3 +98,5 @@ start_servers.bat
 
 # --- CosyVoice Ignore Rules ---
 local_server/cosyvoice_server/*wav
+
+
