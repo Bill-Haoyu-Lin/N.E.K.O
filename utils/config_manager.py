@@ -48,6 +48,9 @@ class ConfigManager:
         self.config_dir = self.app_docs_dir / "config"
         self.memory_dir = self.app_docs_dir / "memory"
         self.live2d_dir = self.app_docs_dir / "live2d"
+        # VRM模型存储在用户文档目录下（与Live2D保持一致）
+        self.vrm_dir = self.app_docs_dir / "vrm"
+        self.vrm_animation_dir = self.vrm_dir / "animation"  # VRMA动画文件目录
         self.workshop_dir = self.app_docs_dir / "workshop"
         self.chara_dir = self.app_docs_dir / "character_cards"
 
@@ -194,23 +197,28 @@ class ConfigManager:
         self._log(f"[ConfigManager] ⚠ All document directories failed, using fallback: {fallback}")
         return fallback
     
-    def _get_project_config_directory(self):
-        """获取项目的config目录"""
+    def _get_project_root(self):
+        """获取项目根目录（私有方法）"""
         if getattr(sys, 'frozen', False):
             # 如果是打包后的exe（PyInstaller）
-            # 单文件模式：数据文件在 _MEIPASS 临时目录
-            # 多文件模式：数据文件在 exe 同目录
             if hasattr(sys, '_MEIPASS'):
                 # 单文件模式：使用临时解压目录
-                app_dir = Path(sys._MEIPASS)
+                return Path(sys._MEIPASS)
             else:
                 # 多文件模式：使用 exe 同目录
-                app_dir = Path(sys.executable).parent
+                return Path(sys.executable).parent
         else:
-            # 如果是脚本运行
-            app_dir = Path.cwd()
-        
-        return app_dir / "config"
+            # 开发模式：使用当前工作目录
+            return Path.cwd()
+    
+    @property
+    def project_root(self):
+        """获取项目根目录（公共属性）"""
+        return self._get_project_root()
+    
+    def _get_project_config_directory(self):
+        """获取项目的config目录"""
+        return self._get_project_root() / "config"
     
     def _get_project_memory_directory(self):
         """获取项目的memory/store目录"""
@@ -303,6 +311,21 @@ class ConfigManager:
             return True
         except Exception as e:
             print(f"Warning: Failed to create live2d directory: {e}", file=sys.stderr)
+            return False
+        
+    def ensure_vrm_directory(self):
+        """确保用户文档目录下的vrm目录和animation子目录存在"""
+        try:
+            # 先确保app_docs_dir存在
+            if not self._ensure_app_docs_directory():
+                return False
+            # 创建vrm目录
+            self.vrm_dir.mkdir(parents=True, exist_ok=True)
+            # 创建animation子目录
+            self.vrm_animation_dir.mkdir(parents=True, exist_ok=True)
+            return True
+        except Exception as e:
+            print(f"Warning: Failed to create vrm directory: {e}", file=sys.stderr)
             return False
         
     def ensure_chara_directory(self):
@@ -786,15 +809,47 @@ class ConfigManager:
         enable_custom_api = core_cfg.get('enableCustomApi', False)
         config['ENABLE_CUSTOM_API'] = enable_custom_api
         
-        # 只有在启用自定义API时才允许覆盖视觉模型相关字段
+        # 只有在启用自定义API时才允许覆盖各模型相关字段
         if enable_custom_api:
+            # Summary（摘要）模型自定义配置映射
+            if core_cfg.get('summaryModelApiKey') is not None:
+                config['SUMMARY_MODEL_API_KEY'] = core_cfg.get('summaryModelApiKey', '') or config.get('SUMMARY_MODEL_API_KEY', '')
+            if core_cfg.get('summaryModelUrl') is not None:
+                config['SUMMARY_MODEL_URL'] = core_cfg.get('summaryModelUrl', '') or config.get('SUMMARY_MODEL_URL', '')
+            if core_cfg.get('summaryModelId') is not None:
+                config['SUMMARY_MODEL'] = core_cfg.get('summaryModelId', '') or config.get('SUMMARY_MODEL', '')
+            
+            # Correction（纠错）模型自定义配置映射
+            if core_cfg.get('correctionModelApiKey') is not None:
+                config['CORRECTION_MODEL_API_KEY'] = core_cfg.get('correctionModelApiKey', '') or config.get('CORRECTION_MODEL_API_KEY', '')
+            if core_cfg.get('correctionModelUrl') is not None:
+                config['CORRECTION_MODEL_URL'] = core_cfg.get('correctionModelUrl', '') or config.get('CORRECTION_MODEL_URL', '')
+            if core_cfg.get('correctionModelId') is not None:
+                config['CORRECTION_MODEL'] = core_cfg.get('correctionModelId', '') or config.get('CORRECTION_MODEL', '')
+            
+            # Emotion（情感分析）模型自定义配置映射
+            if core_cfg.get('emotionModelApiKey') is not None:
+                config['EMOTION_MODEL_API_KEY'] = core_cfg.get('emotionModelApiKey', '') or config.get('EMOTION_MODEL_API_KEY', '')
+            if core_cfg.get('emotionModelUrl') is not None:
+                config['EMOTION_MODEL_URL'] = core_cfg.get('emotionModelUrl', '') or config.get('EMOTION_MODEL_URL', '')
+            if core_cfg.get('emotionModelId') is not None:
+                config['EMOTION_MODEL'] = core_cfg.get('emotionModelId', '') or config.get('EMOTION_MODEL', '')
+            
+            # Vision（视觉）模型自定义配置映射
             if core_cfg.get('visionModelApiKey') is not None:
                 config['VISION_MODEL_API_KEY'] = core_cfg.get('visionModelApiKey', '') or config.get('VISION_MODEL_API_KEY', '')
             if core_cfg.get('visionModelUrl') is not None:
                 config['VISION_MODEL_URL'] = core_cfg.get('visionModelUrl', '') or config.get('VISION_MODEL_URL', '')
             if core_cfg.get('visionModelId') is not None:
-                # 将 core_cfg 中的 visionModelId 映射到内部的 VISION_MODEL（模型ID）
                 config['VISION_MODEL'] = core_cfg.get('visionModelId', '') or config.get('VISION_MODEL', '')
+            
+            # Omni/Realtime（全模态/实时）模型自定义配置映射
+            if core_cfg.get('omniModelApiKey') is not None:
+                config['REALTIME_MODEL_API_KEY'] = core_cfg.get('omniModelApiKey', '') or config.get('REALTIME_MODEL_API_KEY', '')
+            if core_cfg.get('omniModelUrl') is not None:
+                config['REALTIME_MODEL_URL'] = core_cfg.get('omniModelUrl', '') or config.get('REALTIME_MODEL_URL', '')
+            if core_cfg.get('omniModelId') is not None:
+                config['REALTIME_MODEL'] = core_cfg.get('omniModelId', '') or config.get('REALTIME_MODEL', '')
             
             # TTS 自定义配置映射
             if core_cfg.get('ttsModelApiKey') is not None:
