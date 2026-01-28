@@ -1172,6 +1172,68 @@ async def register_voice(request: Request):
         }, status_code=500)
 
 
+@router.delete('/voices/{voice_id}')
+async def delete_voice(voice_id: str):
+    """删除指定音色"""
+    try:
+        _config_manager = get_config_manager()
+        deleted = _config_manager.delete_voice_for_current_api(voice_id)
+        
+        if deleted:
+            # 清理所有角色中使用该音色的引用
+            _config_manager = get_config_manager()
+            session_manager = get_session_manager()
+            characters = _config_manager.load_characters()
+            cleaned_count = 0
+            affected_active_names = []
+            
+            if '猫娘' in characters:
+                for name in characters['猫娘']:
+                    if characters['猫娘'][name].get('voice_id') == voice_id:
+                        characters['猫娘'][name]['voice_id'] = ''
+                        cleaned_count += 1
+                        
+                        # 检查该角色是否是当前活跃的 session
+                        if name in session_manager and session_manager[name].is_active:
+                            affected_active_names.append(name)
+            
+            if cleaned_count > 0:
+                _config_manager.save_characters(characters)
+                
+                # 对于受影响的活跃角色，通知并结束 session
+                for name in affected_active_names:
+                    logger.info(f"检测到活跃角色 {name} 的 voice_id 已被删除，准备刷新...")
+                    # 1. 发送刷新通知
+                    await send_reload_page_notice(session_manager[name], "音色已删除，页面即将刷新")
+                    # 2. 结束 session
+                    try:
+                        await session_manager[name].end_session(by_server=True)
+                        logger.info(f"已结束受影响角色 {name} 的 session")
+                    except Exception as e:
+                        logger.error(f"结束受影响角色 {name} 的 session 时出错: {e}")
+
+                # 自动重新加载配置
+                initialize_character_data = get_initialize_character_data()
+                await initialize_character_data()
+            
+            logger.info(f"已删除音色 '{voice_id}'，并清理了 {cleaned_count} 个角色的引用")
+            return {
+                "success": True,
+                "message": f"音色已删除，已清理 {cleaned_count} 个角色的引用"
+            }
+        else:
+            return JSONResponse({
+                'success': False,
+                'error': '音色不存在或删除失败'
+            }, status_code=404)
+    except Exception as e:
+        logger.error(f"删除音色时出错: {e}")
+        return JSONResponse({
+            'success': False,
+            'error': f'删除音色失败: {str(e)}'
+        }, status_code=500)
+
+
 @router.post('/voice_clone')
 async def voice_clone(file: UploadFile = File(...), prefix: str = Form(...), ref_language: str = Form(default="ch")):
     """
@@ -1191,6 +1253,87 @@ async def voice_clone(file: UploadFile = File(...), prefix: str = Form(...), ref
         logger.error(f"读取文件到内存失败: {e}")
         return JSONResponse({'error': f'读取文件失败: {e}'}, status_code=500)
     
+    # 检测是否使用本地 TTS（ws/wss 协议）
+    _config_manager = get_config_manager()
+    tts_config = _config_manager.get_model_api_config('tts_custom')
+    base_url = tts_config.get('base_url', '')
+    is_local_tts = tts_config.get('is_custom') and base_url.startswith(('ws://', 'wss://'))
+    
+    if is_local_tts:
+        # ==================== 本地 TTS 注册流程 ====================
+        # 将 ws(s):// 转换为 http(s):// 用于 REST API 调用
+        if base_url.startswith('wss://'):
+            http_base = 'https://' + base_url[6:]
+        else:
+            http_base = 'http://' + base_url[5:]
+        
+        # 移除可能的 /v1/audio/speech/stream 路径，只保留主机部分
+        # 例如: ws://localhost:50000/v1/audio/speech/stream -> http://localhost:50000
+        if '/v1/' in http_base:
+            http_base = http_base.split('/v1/')[0]
+        
+        register_url = f"{http_base}/v1/speakers/register"
+        logger.info(f"使用本地 TTS 注册: {register_url}")
+        
+        try:
+            file_buffer.seek(0)
+            
+            # 根据用户 demo，API 格式：
+            # POST /v1/speakers/register
+            # multipart/form-data: speaker_id, prompt_text, prompt_audio
+            files = {
+                'prompt_audio': (file.filename, file_buffer, 'audio/wav')
+            }
+            data = {
+                'speaker_id': prefix,
+                'prompt_text': f"<|{ref_language}|>" if ref_language != 'ch' else "希望你以后能够做的比我还好呦。"
+            }
+            
+            async with httpx.AsyncClient(timeout=60) as client:
+                resp = await client.post(register_url, data=data, files=files)
+                
+                if resp.status_code == 200:
+                    result = resp.json()
+                    voice_id = prefix  # 本地 TTS 使用 speaker_id 作为 voice_id
+                    
+                    # 保存到本地音色库（使用特殊的 key 标识本地 TTS）
+                    voice_data = {
+                        'voice_id': voice_id,
+                        'prefix': prefix,
+                        'is_local': True,
+                        'created_at': datetime.now().isoformat()
+                    }
+                    try:
+                        _config_manager.save_voice_for_current_api(voice_id, voice_data)
+                        logger.info(f"本地 TTS voice_id 已保存: {voice_id}")
+                    except Exception as save_error:
+                        logger.warning(f"保存 voice_id 到音色库失败（本地 TTS 仍可用）: {save_error}")
+                    
+                    return JSONResponse({
+                        'voice_id': voice_id,
+                        'message': result.get('message', '本地音色注册成功'),
+                        'is_local': True
+                    })
+                else:
+                    error_text = resp.text
+                    logger.error(f"本地 TTS 注册失败: {error_text}")
+                    return JSONResponse({
+                        'error': f'本地 TTS 注册失败: {error_text[:200]}'
+                    }, status_code=resp.status_code)
+                    
+        except httpx.ConnectError as e:
+            logger.error(f"无法连接本地 TTS 服务器: {e}")
+            return JSONResponse({
+                'error': f'无法连接本地 TTS 服务器: {http_base}，请确保服务器已启动'
+            }, status_code=503)
+        except Exception as e:
+            logger.error(f"本地 TTS 注册时发生错误: {e}")
+            return JSONResponse({
+                'error': f'本地 TTS 注册失败: {str(e)}'
+            }, status_code=500)
+    
+    # ==================== 阿里云 TTS 注册流程（原有逻辑） ====================
+    
     # 根据参考音频语言计算 language_hints
     # 对于中文 (ch)，language_hints 为空列表
     # 对于其他语言，language_hints 为包含该语言代码的单元素列表
@@ -1200,10 +1343,11 @@ async def voice_clone(file: UploadFile = File(...), prefix: str = Form(...), ref
         ref_language = 'ch'
     
     language_hints = [] if ref_language == 'ch' else [ref_language]
-    logger.info(f"参考音频语言: {ref_language}, language_hints: {language_hints}")
+    logger.info(f"参考音频语言（阿里云）: {ref_language}, language_hints: {language_hints}")
 
 
     def validate_audio_file(file_buffer: io.BytesIO, filename: str) -> tuple[str, str]:
+
         """
         验证音频文件类型和格式
         返回: (mime_type, error_message)
