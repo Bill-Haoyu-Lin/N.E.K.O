@@ -26,6 +26,7 @@ class UniversalTutorialManager {
         this.tutorialInteractionStates = new Map();
         this.tutorialMarkerDisplayCache = null;
         this.tutorialRollbackActive = false;
+        this._applyingInteractionState = false;
 
         // 用于追踪在引导中修改过的元素及其原始样式
         this.modifiedElementsMap = new Map();
@@ -149,56 +150,7 @@ class UniversalTutorialManager {
                 return;
             }
 
-            this.driver = new DriverClass({
-                padding: this.tutorialPadding,
-                allowClose: true,
-                overlayClickNext: false,
-                animate: true,
-                smoothScroll: true, // 启用平滑滚动
-                className: 'neko-tutorial-driver',
-                disableActiveInteraction: false,
-                // i18n 按钮文本
-                nextBtnText: this.t('tutorial.buttons.next', '下一步'),
-                prevBtnText: this.t('tutorial.buttons.prev', '上一步'),
-                doneBtnText: this.t('tutorial.buttons.done', '完成'),
-                onDestroyStarted: () => {
-                    // 教程结束时，如果需要标记 hint 已显示
-                    if (this.shouldMarkHintShown) {
-                        localStorage.setItem('neko_tutorial_reset_hint_shown', 'true');
-                        this.shouldMarkHintShown = false;
-                        console.log('[Tutorial] 已标记重置提示为已显示');
-                    }
-                },
-                onHighlighted: (element, step, options) => {
-                    // 每次高亮元素时，确保元素在视口中
-                    console.log('[Tutorial] 高亮元素:', step.element);
-
-                    // 给一点时间让 Driver.js 完成定位
-                    setTimeout(async () => {
-                        if (element && element.element) {
-                            const targetElement = element.element;
-                            // 检查元素是否在视口中
-                            const rect = targetElement.getBoundingClientRect();
-                            const isInViewport = (
-                                rect.top >= 0 &&
-                                rect.left >= 0 &&
-                                rect.bottom <= (window.innerHeight || document.documentElement.clientHeight) &&
-                                rect.right <= (window.innerWidth || document.documentElement.clientWidth)
-                            );
-
-                            if (!isInViewport) {
-                                console.log('[Tutorial] 元素不在视口中，滚动到元素');
-                                targetElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                            }
-                        }
-
-                        await this.applyTutorialInteractionState(step, 'highlight');
-
-                        // 启用 popover 拖动功能
-                        this.enablePopoverDragging();
-                    }, 100);
-                }
-            });
+            this.driver = new DriverClass(this.getDriverConfig());
 
             this.isInitialized = true;
             console.log('[Tutorial] driver.js 初始化成功');
@@ -209,6 +161,62 @@ class UniversalTutorialManager {
         } catch (error) {
             console.error('[Tutorial] driver.js 初始化失败:', error);
         }
+    }
+
+    /**
+     * 获取 driver.js 的统一配置
+     */
+    getDriverConfig() {
+        return {
+            padding: this.tutorialPadding,
+            allowClose: true,
+            overlayClickNext: false,
+            animate: true,
+            smoothScroll: true, // 启用平滑滚动
+            className: 'neko-tutorial-driver',
+            disableActiveInteraction: false,
+            // i18n 按钮文本
+            nextBtnText: this.t('tutorial.buttons.next', '下一步'),
+            prevBtnText: this.t('tutorial.buttons.prev', '上一步'),
+            doneBtnText: this.t('tutorial.buttons.done', '完成'),
+            onDestroyStarted: () => {
+                // 教程结束时，如果需要标记 hint 已显示
+                if (this.shouldMarkHintShown) {
+                    localStorage.setItem('neko_tutorial_reset_hint_shown', 'true');
+                    this.shouldMarkHintShown = false;
+                    console.log('[Tutorial] 已标记重置提示为已显示');
+                }
+            },
+            onHighlighted: (element, step, options) => {
+                // 每次高亮元素时，确保元素在视口中
+                console.log('[Tutorial] 高亮元素:', step.element);
+
+                // 给一点时间让 Driver.js 完成定位
+                setTimeout(async () => {
+                    if (element && element.element) {
+                        const targetElement = element.element;
+                        // 检查元素是否在视口中
+                        const rect = targetElement.getBoundingClientRect();
+                        const isInViewport = (
+                            rect.top >= 0 &&
+                            rect.left >= 0 &&
+                            rect.bottom <= (window.innerHeight || document.documentElement.clientHeight) &&
+                            rect.right <= (window.innerWidth || document.documentElement.clientWidth)
+                        );
+
+                        if (!isInViewport) {
+                            console.log('[Tutorial] 元素不在视口中，滚动到元素');
+                            targetElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                        }
+                    }
+
+                    await this.applyTutorialInteractionState(step, 'highlight');
+
+                    // 启用 popover 拖动功能
+                    this.enablePopoverDragging();
+                }, 100);
+            }
+        };
     }
 
     /**
@@ -233,47 +241,7 @@ class UniversalTutorialManager {
             }
 
             // 重新创建 driver 实例，使用最新的 i18n 翻译
-            this.driver = new DriverClass({
-                padding: this.tutorialPadding,
-                allowClose: true,
-                overlayClickNext: false,
-                animate: true,
-                smoothScroll: true,
-                className: 'neko-tutorial-driver',
-                disableActiveInteraction: false,
-                // i18n 按钮文本
-                nextBtnText: this.t('tutorial.buttons.next', '下一步'),
-                prevBtnText: this.t('tutorial.buttons.prev', '上一步'),
-                doneBtnText: this.t('tutorial.buttons.done', '完成'),
-                onDestroyStarted: () => {
-                    if (this.shouldMarkHintShown) {
-                        localStorage.setItem('neko_tutorial_reset_hint_shown', 'true');
-                        this.shouldMarkHintShown = false;
-                        console.log('[Tutorial] 已标记重置提示为已显示');
-                    }
-                },
-                onHighlighted: (element, step, options) => {
-                    console.log('[Tutorial] 高亮元素:', step.element);
-                    setTimeout(async () => {
-                        if (element && element.element) {
-                            const targetElement = element.element;
-                            const rect = targetElement.getBoundingClientRect();
-                            const isInViewport = (
-                                rect.top >= 0 &&
-                                rect.left >= 0 &&
-                                rect.bottom <= (window.innerHeight || document.documentElement.clientHeight) &&
-                                rect.right <= (window.innerWidth || document.documentElement.clientWidth)
-                            );
-                            if (!isInViewport) {
-                                console.log('[Tutorial] 元素不在视口中，滚动到元素');
-                                targetElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                            }
-                        }
-                        await this.applyTutorialInteractionState(step, 'highlight');
-                        this.enablePopoverDragging();
-                    }, 100);
-                }
-            });
+            this.driver = new DriverClass(this.getDriverConfig());
 
             console.log('[Tutorial] driver.js 重新创建成功，使用 i18n 按钮文本');
         } catch (error) {
@@ -999,18 +967,26 @@ class UniversalTutorialManager {
 
     isTutorialControlledElement(element) {
         if (!element) return false;
-        const id = element.id || '';
-        if (id.startsWith('live2d-') || id === 'resetSessionButton' || id === 'returnSessionButton' || id === 'chat-container' || id === 'toggle-chat-btn') {
-            return true;
-        }
-        if (element.classList && element.classList.contains('live2d-floating-btn')) {
-            return true;
-        }
-        if (element.closest) {
-            if (element.closest('#live2d-floating-buttons') || element.closest('#live2d-return-button-container')) {
-                return true;
+        
+        // 复用选择器列表进行匹配检查
+        const selectors = this.getTutorialInteractiveSelectors();
+        const isMatched = selectors.some(selector => {
+            try {
+                return element.matches(selector) || (element.closest && element.closest(selector));
+            } catch (e) {
+                console.warn(`[Tutorial] 选择器匹配失败: ${selector}`, e);
+                return false;
             }
+        });
+
+        if (isMatched) return true;
+
+        // 额外的特殊逻辑：匹配所有以 live2d- 开头的 ID（保持与原有逻辑兼容）
+        const id = element.id || '';
+        if (id.startsWith('live2d-')) {
+            return true;
         }
+
         return false;
     }
 
@@ -1035,9 +1011,11 @@ class UniversalTutorialManager {
         const highlight = document.querySelector('.driver-highlight');
         const popover = document.querySelector('.driver-popover');
         const elements = [overlay, highlight, popover].filter(Boolean);
+        
         if (!this.tutorialMarkerDisplayCache) {
             this.tutorialMarkerDisplayCache = new Map();
         }
+
         if (!visible) {
             const keepPopover = options.keepPopover === true;
             elements.forEach(element => {
@@ -1045,18 +1023,20 @@ class UniversalTutorialManager {
                 if (keepPopover && element === popover) return;
 
                 if (!this.tutorialMarkerDisplayCache.has(element)) {
-                    this.tutorialMarkerDisplayCache.set(element, element.style.display);
+                    this.tutorialMarkerDisplayCache.set(element, element.style.visibility);
                 }
-                element.style.display = 'none';
+                // 使用 visibility: hidden 代替 display: none，保持布局占位，过渡更平滑
+                element.style.visibility = 'hidden';
             });
             return;
         }
+
         elements.forEach(element => {
             const cached = this.tutorialMarkerDisplayCache.get(element);
             if (cached !== undefined) {
-                element.style.display = cached;
+                element.style.visibility = cached;
             } else {
-                element.style.display = '';
+                element.style.visibility = 'visible';
             }
         });
     }
@@ -1186,24 +1166,45 @@ class UniversalTutorialManager {
 
     async applyTutorialInteractionState(currentStepConfig, context) {
         if (!window.isInTutorial || !currentStepConfig) return;
-        this.tutorialRollbackActive = false;
-        if (!this.tutorialControlledElements || this.tutorialControlledElements.size === 0) {
-            this.collectTutorialControlledElements(this.cachedValidSteps || []);
+
+        if (this._applyingInteractionState) {
+            console.log('[Tutorial] 交互状态正在应用中，跳过重复调用');
+            return;
         }
-        this.setTutorialMarkersVisible(false);
-        this.disableAllTutorialInteractions();
-        const currentElement = document.querySelector(currentStepConfig.element);
-        if (currentElement && !currentStepConfig.disableActiveInteraction) {
-            this.enableCurrentStepInteractions(currentElement);
-        }
-        if (currentStepConfig.enableModelInteraction) {
-            const live2dCanvas = document.getElementById('live2d-canvas');
-            if (live2dCanvas) {
-                this.setElementInteractive(live2dCanvas, true);
+
+        try {
+            this._applyingInteractionState = true;
+            this.tutorialRollbackActive = false;
+            if (!this.tutorialControlledElements || this.tutorialControlledElements.size === 0) {
+                this.collectTutorialControlledElements(this.cachedValidSteps || []);
             }
+
+            // 仅在初次启动或特定上下文时才隐藏标记，减少闪烁
+            const shouldHideMarkers = context === 'start' || context === 'rollback';
+            if (shouldHideMarkers) {
+                this.setTutorialMarkersVisible(false);
+            }
+
+            this.disableAllTutorialInteractions();
+            const currentElement = document.querySelector(currentStepConfig.element);
+            if (currentElement && !currentStepConfig.disableActiveInteraction) {
+                this.enableCurrentStepInteractions(currentElement);
+            }
+            if (currentStepConfig.enableModelInteraction) {
+                const live2dCanvas = document.getElementById('live2d-canvas');
+                if (live2dCanvas) {
+                    this.setElementInteractive(live2dCanvas, true);
+                }
+            }
+
+            if (shouldHideMarkers) {
+                this.setTutorialMarkersVisible(true);
+            }
+            
+            await this.refreshAndValidateTutorialLayout(currentElement, context);
+        } finally {
+            this._applyingInteractionState = false;
         }
-        this.setTutorialMarkersVisible(true);
-        await this.refreshAndValidateTutorialLayout(currentElement, context);
     }
 
     /**
@@ -1545,7 +1546,9 @@ class UniversalTutorialManager {
         setTimeout(() => {
             const steps = this.cachedValidSteps || [];
             if (steps.length > 0) {
-                this.applyTutorialInteractionState(steps[0], 'start');
+                this.applyTutorialInteractionState(steps[0], 'start').catch(err => {
+                    console.error('[Tutorial] 初始交互状态应用失败:', err);
+                });
             }
         }, 0);
         console.log('[Tutorial] 引导已启动，页面:', this.currentPage);
