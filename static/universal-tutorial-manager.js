@@ -192,28 +192,32 @@ class UniversalTutorialManager {
                 console.log('[Tutorial] 高亮元素:', step.element);
 
                 // 给一点时间让 Driver.js 完成定位
-                setTimeout(async () => {
-                    if (element && element.element) {
-                        const targetElement = element.element;
-                        // 检查元素是否在视口中
-                        const rect = targetElement.getBoundingClientRect();
-                        const isInViewport = (
-                            rect.top >= 0 &&
-                            rect.left >= 0 &&
-                            rect.bottom <= (window.innerHeight || document.documentElement.clientHeight) &&
-                            rect.right <= (window.innerWidth || document.documentElement.clientWidth)
-                        );
+                setTimeout(() => {
+                    (async () => {
+                        if (element && element.element) {
+                            const targetElement = element.element;
+                            // 检查元素是否在视口中
+                            const rect = targetElement.getBoundingClientRect();
+                            const isInViewport = (
+                                rect.top >= 0 &&
+                                rect.left >= 0 &&
+                                rect.bottom <= (window.innerHeight || document.documentElement.clientHeight) &&
+                                rect.right <= (window.innerWidth || document.documentElement.clientWidth)
+                            );
 
-                        if (!isInViewport) {
-                            console.log('[Tutorial] 元素不在视口中，滚动到元素');
-                            targetElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                            if (!isInViewport) {
+                                console.log('[Tutorial] 元素不在视口中，滚动到元素');
+                                targetElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                            }
                         }
-                    }
 
-                    await this.applyTutorialInteractionState(step, 'highlight');
+                        await this.applyTutorialInteractionState(step, 'highlight');
 
-                    // 启用 popover 拖动功能
-                    this.enablePopoverDragging();
+                        // 启用 popover 拖动功能
+                        this.enablePopoverDragging();
+                    })().catch(err => {
+                        console.error('[Tutorial] onHighlighted 回调执行失败:', err);
+                    });
                 }, 100);
             }
         };
@@ -1538,8 +1542,12 @@ class UniversalTutorialManager {
 
         // 监听事件
         this.driver.on('destroy', () => this.onTutorialEnd());
-        this.driver.on('next', async () => await this.onStepChange());
-        this.driver.on('prev', async () => await this.onStepChange());
+        this.driver.on('next', () => this.onStepChange().catch(err => {
+            console.error('[Tutorial] 步骤切换失败:', err);
+        }));
+        this.driver.on('prev', () => this.onStepChange().catch(err => {
+            console.error('[Tutorial] 步骤切换失败:', err);
+        }));
 
         // 启动引导
         this.driver.start();
@@ -2052,7 +2060,7 @@ class UniversalTutorialManager {
 
                 if (needsAdvancedSettings) {
                     console.log('[Tutorial] 进入进阶设定相关步骤，确保展开状态');
-                    this._ensureCharaManagerExpanded();
+                    await this._ensureCharaManagerExpanded();
                 }
             }
 
@@ -2425,76 +2433,85 @@ class UniversalTutorialManager {
      * 用于进入进阶设定相关步骤前的预处理
      */
     _ensureCharaManagerExpanded() {
-        let attempts = 0;
-        const maxAttempts = 10;
-        const self = this;
+        return new Promise((resolve) => {
+            let attempts = 0;
+            const maxAttempts = 10;
+            const self = this;
 
-        const tryExpand = () => {
-            attempts++;
-            console.log(`[Tutorial] _ensureCharaManagerExpanded: attempt ${attempts}/${maxAttempts}`);
+            const tryExpand = () => {
+                attempts++;
+                console.log(`[Tutorial] _ensureCharaManagerExpanded: attempt ${attempts}/${maxAttempts}`);
 
-            // 1. 找到第一个猫娘卡片
-            const targetBlock = document.querySelector('.catgirl-block:first-child');
-            if (!targetBlock) {
-                console.warn('[Tutorial] _ensureCharaManagerExpanded: 未找到目标猫娘卡片');
-                if (attempts < maxAttempts) setTimeout(tryExpand, 300);
-                return;
-            }
-
-            // 2. 确保猫娘卡片已展开
-            const details = targetBlock.querySelector('.catgirl-details');
-            const expandBtn = targetBlock.querySelector('.catgirl-expand');
-            if (details && expandBtn) {
-                const detailsStyle = window.getComputedStyle(details);
-                if (detailsStyle.display === 'none') {
-                    console.log('[Tutorial] 猫娘卡片未展开，正在展开...');
-                    expandBtn.click();
-                    // 等待卡片展开动画完成后再尝试展开进阶设定
+                // 1. 找到第一个猫娘卡片
+                const targetBlock = document.querySelector('.catgirl-block:first-child');
+                if (!targetBlock) {
+                    console.warn('[Tutorial] _ensureCharaManagerExpanded: 未找到目标猫娘卡片');
                     if (attempts < maxAttempts) {
-                        setTimeout(tryExpand, 600);
+                        setTimeout(tryExpand, 300);
+                    } else {
+                        resolve(false);
                     }
                     return;
                 }
-            }
 
-            // 3. 卡片已展开，确保进阶设定已展开
-            const foldContainer = targetBlock.querySelector('.fold');
-            const foldToggle = targetBlock.querySelector('.fold-toggle');
-            let clickedToggle = false;
-
-            if (foldContainer && foldToggle) {
-                const isExpanded = foldContainer.classList.contains('open') ||
-                    window.getComputedStyle(foldContainer).display !== 'none';
-                if (!isExpanded) {
-                    console.log('[Tutorial] 进阶设定未展开，正在展开...');
-                    foldToggle.click();
-                    clickedToggle = true;
-                }
-            }
-
-            // 4. 验证展开状态，失败则重试
-            setTimeout(() => {
-                if (self.driver && typeof self.driver.refresh === 'function') {
-                    self.driver.refresh();
-                }
-
-                if (clickedToggle && attempts < maxAttempts) {
-                    const fc = targetBlock.querySelector('.fold');
-                    if (fc) {
-                        const nowExpanded = fc.classList.contains('open') ||
-                            window.getComputedStyle(fc).display !== 'none';
-                        if (!nowExpanded) {
-                            console.log('[Tutorial] 进阶设定展开未确认，重试...');
-                            setTimeout(tryExpand, 300);
-                            return;
+                // 2. 确保猫娘卡片已展开
+                const details = targetBlock.querySelector('.catgirl-details');
+                const expandBtn = targetBlock.querySelector('.catgirl-expand');
+                if (details && expandBtn) {
+                    const detailsStyle = window.getComputedStyle(details);
+                    if (detailsStyle.display === 'none') {
+                        console.log('[Tutorial] 猫娘卡片未展开，正在展开...');
+                        expandBtn.click();
+                        // 等待卡片展开动画完成后再尝试展开进阶设定
+                        if (attempts < maxAttempts) {
+                            setTimeout(tryExpand, 600);
+                        } else {
+                            resolve(false);
                         }
+                        return;
                     }
                 }
-                console.log('[Tutorial] _ensureCharaManagerExpanded: 完成');
-            }, 500);
-        };
 
-        tryExpand();
+                // 3. 卡片已展开，确保进阶设定已展开
+                const foldContainer = targetBlock.querySelector('.fold');
+                const foldToggle = targetBlock.querySelector('.fold-toggle');
+                let clickedToggle = false;
+
+                if (foldContainer && foldToggle) {
+                    const isExpanded = foldContainer.classList.contains('open') ||
+                        window.getComputedStyle(foldContainer).display !== 'none';
+                    if (!isExpanded) {
+                        console.log('[Tutorial] 进阶设定未展开，正在展开...');
+                        foldToggle.click();
+                        clickedToggle = true;
+                    }
+                }
+
+                // 4. 验证展开状态，失败则重试
+                setTimeout(() => {
+                    if (self.driver && typeof self.driver.refresh === 'function') {
+                        self.driver.refresh();
+                    }
+
+                    if (clickedToggle && attempts < maxAttempts) {
+                        const fc = targetBlock.querySelector('.fold');
+                        if (fc) {
+                            const nowExpanded = fc.classList.contains('open') ||
+                                window.getComputedStyle(fc).display !== 'none';
+                            if (!nowExpanded) {
+                                console.log('[Tutorial] 进阶设定展开未确认，重试...');
+                                setTimeout(tryExpand, 300);
+                                return;
+                            }
+                        }
+                    }
+                    console.log('[Tutorial] _ensureCharaManagerExpanded: 完成');
+                    resolve(true);
+                }, 500);
+            };
+
+            tryExpand();
+        });
     }
 
     /**
