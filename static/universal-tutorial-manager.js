@@ -150,7 +150,7 @@ class UniversalTutorialManager {
             }
 
             this.driver = new DriverClass({
-                padding: 8,
+                padding: this.tutorialPadding,
                 allowClose: true,
                 overlayClickNext: false,
                 animate: true,
@@ -174,7 +174,7 @@ class UniversalTutorialManager {
                     console.log('[Tutorial] 高亮元素:', step.element);
 
                     // 给一点时间让 Driver.js 完成定位
-                    setTimeout(() => {
+                    setTimeout(async () => {
                         if (element && element.element) {
                             const targetElement = element.element;
                             // 检查元素是否在视口中
@@ -192,7 +192,7 @@ class UniversalTutorialManager {
                             }
                         }
 
-                        this.applyTutorialInteractionState(step, 'highlight');
+                        await this.applyTutorialInteractionState(step, 'highlight');
 
                         // 启用 popover 拖动功能
                         this.enablePopoverDragging();
@@ -234,7 +234,7 @@ class UniversalTutorialManager {
 
             // 重新创建 driver 实例，使用最新的 i18n 翻译
             this.driver = new DriverClass({
-                padding: 8,
+                padding: this.tutorialPadding,
                 allowClose: true,
                 overlayClickNext: false,
                 animate: true,
@@ -254,7 +254,7 @@ class UniversalTutorialManager {
                 },
                 onHighlighted: (element, step, options) => {
                     console.log('[Tutorial] 高亮元素:', step.element);
-                    setTimeout(() => {
+                    setTimeout(async () => {
                         if (element && element.element) {
                             const targetElement = element.element;
                             const rect = targetElement.getBoundingClientRect();
@@ -269,7 +269,7 @@ class UniversalTutorialManager {
                                 targetElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
                             }
                         }
-                        this.applyTutorialInteractionState(step, 'highlight');
+                        await this.applyTutorialInteractionState(step, 'highlight');
                         this.enablePopoverDragging();
                     }, 100);
                 }
@@ -1144,10 +1144,13 @@ class UniversalTutorialManager {
         return true;
     }
 
-    refreshAndValidateTutorialLayout(currentElement, context) {
+    async refreshAndValidateTutorialLayout(currentElement, context) {
         if (this.driver && typeof this.driver.refresh === 'function') {
             this.driver.refresh();
         }
+        // 等待驱动程序完成高亮框重定位（匹配 onHighlighted 的 100ms 延迟）
+        await new Promise(r => setTimeout(r, 100));
+        
         void document.body.offsetHeight;
         const ok = this.validateTutorialLayout(currentElement, context);
         if (!ok) {
@@ -1181,7 +1184,7 @@ class UniversalTutorialManager {
         console.log('[Tutorial] 已恢复交互元素默认状态');
     }
 
-    applyTutorialInteractionState(currentStepConfig, context) {
+    async applyTutorialInteractionState(currentStepConfig, context) {
         if (!window.isInTutorial || !currentStepConfig) return;
         this.tutorialRollbackActive = false;
         if (!this.tutorialControlledElements || this.tutorialControlledElements.size === 0) {
@@ -1200,7 +1203,7 @@ class UniversalTutorialManager {
             }
         }
         this.setTutorialMarkersVisible(true);
-        this.refreshAndValidateTutorialLayout(currentElement, context);
+        await this.refreshAndValidateTutorialLayout(currentElement, context);
     }
 
     /**
@@ -1454,20 +1457,6 @@ class UniversalTutorialManager {
             }
         }
 
-        // 禁用对话框拖动功能（在引导中）
-        const chatContainer = document.getElementById('chat-container');
-        if (chatContainer) {
-            chatContainer.style.pointerEvents = 'none';
-            console.log('[Tutorial] 禁用对话框拖动功能');
-        }
-
-        // 禁用 Live2D 模型拖动功能（在引导中）
-        const live2dCanvas = document.getElementById('live2d-canvas');
-        if (live2dCanvas) {
-            live2dCanvas.style.pointerEvents = 'none';
-            console.log('[Tutorial] 禁用 Live2D 模型拖动功能');
-        }
-
         // 将 Live2D 模型移到屏幕右边（在引导中）
         const live2dContainer = document.getElementById('live2d-container');
         if (live2dContainer) {
@@ -1548,7 +1537,8 @@ class UniversalTutorialManager {
 
         // 监听事件
         this.driver.on('destroy', () => this.onTutorialEnd());
-        this.driver.on('next', () => this.onStepChange());
+        this.driver.on('next', async () => await this.onStepChange());
+        this.driver.on('prev', async () => await this.onStepChange());
 
         // 启动引导
         this.driver.start();
@@ -2036,7 +2026,7 @@ class UniversalTutorialManager {
     /**
      * 步骤改变时的回调
      */
-    onStepChange() {
+    async onStepChange() {
         this.currentStep = this.driver.currentStep || 0;
         console.log(`[Tutorial] 当前步骤: ${this.currentStep + 1}`);
 
@@ -2063,19 +2053,7 @@ class UniversalTutorialManager {
                 }
             }
 
-            this.applyTutorialInteractionState(currentStepConfig, 'step-change');
-
-            // 根据步骤配置启用/禁用模型交互（点击模型触发表情动作）
-            const live2dCanvas = document.getElementById('live2d-canvas');
-            if (live2dCanvas) {
-                if (currentStepConfig.enableModelInteraction) {
-                    this.setElementInteractive(live2dCanvas, true);
-                    console.log('[Tutorial] 启用模型交互');
-                } else {
-                    this.setElementInteractive(live2dCanvas, false);
-                    console.log('[Tutorial] 禁用模型交互');
-                }
-            }
+            await this.applyTutorialInteractionState(currentStepConfig, 'step-change');
 
 
             // 情感配置页面：未选择模型时禁止进入下一步
@@ -2265,20 +2243,6 @@ class UniversalTutorialManager {
             document.body.style.overflow = this._originalBodyOverflow ?? '';
             this._originalBodyOverflow = undefined;
             console.log('[Tutorial] 恢复页面滚动');
-        }
-
-        // 恢复对话框拖动功能
-        const chatContainer = document.getElementById('chat-container');
-        if (chatContainer) {
-            chatContainer.style.pointerEvents = 'auto';
-            console.log('[Tutorial] 恢复对话框拖动功能');
-        }
-
-        // 恢复 Live2D 模型拖动功能和原始位置
-        const live2dCanvas = document.getElementById('live2d-canvas');
-        if (live2dCanvas) {
-            live2dCanvas.style.pointerEvents = 'auto';
-            console.log('[Tutorial] 恢复 Live2D 模型拖动功能');
         }
 
         const live2dContainer = document.getElementById('live2d-container');
