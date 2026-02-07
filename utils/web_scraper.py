@@ -186,14 +186,23 @@ async def fetch_bilibili_trending(limit: int = 30) -> Dict[str, Any]:
         result = await homepage.get_videos(credential=credential)
         
         videos = []
-        if result and 'item' in result:
-            items = result['item']
-            for item in items[:limit]:
+        # 安全地访问嵌套字典，避免 KeyError
+        if result:
+            # bilibili-api 返回的数据结构可能是 {'data': {'item': [...]}} 或直接 {'item': [...]}
+            # 先尝试从 data 中获取，如果没有则直接获取
+            data = result.get('data', result)
+            items = data.get('item', [])
+            
+            for item in items:
                 # 提取视频信息
                 bvid = item.get('bvid', '')
                 # 有些项目可能是广告或其他类型，跳过没有bvid的
                 if not bvid:
                     continue
+                
+                # 提取推荐理由（如果有）
+                rcmd_reason = item.get('rcmd_reason', {})
+                rcmd_reason_text = rcmd_reason.get('content', '') if isinstance(rcmd_reason, dict) else ''
                     
                 videos.append({
                     'title': item.get('title', ''),
@@ -202,7 +211,10 @@ async def fetch_bilibili_trending(limit: int = 30) -> Dict[str, Any]:
                     'view': item.get('stat', {}).get('view', 0),
                     'like': item.get('stat', {}).get('like', 0),
                     'bvid': bvid,
-                    'url': f'https://www.bilibili.com/video/{bvid}'
+                    'url': f'https://www.bilibili.com/video/{bvid}',
+                    'id': item.get('id', 0),  # 视频ID
+                    'goto': item.get('goto', ''),  # 跳转类型
+                    'rcmd_reason': rcmd_reason_text,  # 推荐理由
                 })
                 
                 # 如果已经获取到足够的视频，停止
@@ -799,9 +811,13 @@ def format_trending_content(trending_content: Dict[str, Any]) -> str:
                 title = video.get('title', '')
                 author = video.get('author', '')
                 url = video.get('url', '')
+                rcmd_reason = video.get('rcmd_reason', '')
                 
                 output_lines.append(f"{i}. {title}")
                 output_lines.append(f"   UP主: {author}")
+                # 显示推荐理由（如果有）
+                if rcmd_reason:
+                    output_lines.append(f"   推荐理由: {rcmd_reason}")
                 if url:
                     output_lines.append(f"   链接: {url}")
             
