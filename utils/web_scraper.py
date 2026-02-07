@@ -167,7 +167,7 @@ def _get_bilibili_credential():
     
     # 如果没有找到cookie文件，使用 DEBUG 级别记录（避免打扰不用B站的用户）
     logger.debug("未找到 Bilibili cookie 文件，将使用默认推荐（非个性化）")
-    logger.debug(f"提示：要使用个性化推荐，可导出cookies到以下位置之一：")
+    logger.debug("提示：要使用个性化推荐，可导出cookies到以下位置之一：")
     logger.debug(f"  - {Path(os.path.expanduser('~')) / 'bilibili_cookies.json'}")
     logger.debug(f"  - {Path('config') / 'bilibili_cookies.json'}")
     
