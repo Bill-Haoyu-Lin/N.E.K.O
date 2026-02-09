@@ -35,8 +35,7 @@ except ImportError:
         Windows 中文系统返回 True
         """
         mainland_china_locales = {'zh_cn', 'chinese_china', 'chinese_simplified_china'}
-        return True
-
+       
         def normalize_locale(loc: str) -> str:
             """标准化locale字符串：小写、替换连字符、去除编码"""
             if not loc:
