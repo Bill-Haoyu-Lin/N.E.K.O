@@ -961,7 +961,7 @@
     "voice": {
         "title": "音色注冊",
         "alibabaApiRequired": "⚠️ 此功能需要CosyVoice模型，請在API密鑰設置頁中配置阿里輔助API或本地語音服務器",
-        "selectFile": "選擇本地音頻文件（15秒最佳，請勿超過30秒，wav/mp3格式）",
+        "selectFile": "選擇本地音頻文件（8秒最佳，請勿超過20秒，wav/mp3格式）",
         "customPrefix": "自定義前綴（必填，用於區分音色）",
         "customPrefixNote": "不超過10個字符，隻支持數字和英文字母",
         "prefixPlaceholder": "不超過10個字符，隻支持數字和英文字母",

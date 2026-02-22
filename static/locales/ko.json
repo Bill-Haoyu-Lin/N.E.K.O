@@ -961,7 +961,7 @@
   "voice": {
     "title": "음성 등록",
     "alibabaApiRequired": "⚠️ 이 기능을 사용하려면 CosyVoice 모델이 필요합니다. API 키 설정에서 Alibaba Assist API 또는 로컬 음성 서버를 구성하세요.",
-    "selectFile": "로컬 오디오 파일 선택(15초 권장, 최대 30초, wav/mp3 형식)",
+    "selectFile": "로컬 오디오 파일 선택(8초 권장, 최대 20초, wav/mp3 형식)",
     "customPrefix": "사용자 정의 접두사(필수, 다양한 음성을 구별하는 데 사용됨)",
     "customPrefixNote": "UI : 최대 10자, 숫자, 영문만 가능",
     "prefixPlaceholder": "UI : 최대 10자, 숫자, 영문만 가능",

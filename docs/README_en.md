@@ -83,9 +83,9 @@ Our ultimate goal is to build a N.E.K.O. metaverse that seamlessly integrates in
 
 QQ Group: 1022939659
 
-# Quick Start (Windows Users)
+# Quick Start (Windows Users, Macbook Users)
 
-For *one-click package users*, simply run `N.E.K.O.exe` after extracting to start.
+For *one-click package users*, simply run `N.E.K.O.exe` or `N.E.K.O.app` after extracting to start. (Macbook users need to manually bypass system quarantine)
 
 ## Docker Deployment (Linux Users)
 
@@ -112,7 +112,6 @@ services:
       - NEKO_ASSIST_API_KEY_GLM=${NEKO_ASSIST_API_KEY_GLM:-}
       - NEKO_ASSIST_API_KEY_STEP=${NEKO_ASSIST_API_KEY_STEP:-}
       - NEKO_ASSIST_API_KEY_SILICON=${NEKO_ASSIST_API_KEY_SILICON:-}
-      - NEKO_MCP_TOKEN=${NEKO_MCP_TOKEN:-}
 
       # API Providers
       - NEKO_CORE_API=${NEKO_CORE_API:-qwen}
@@ -147,38 +146,6 @@ networks:
     driver: bridge
 ```
 
-#### Core API Configuration
-
-| Environment Variable | Description | Default | Example |
-|---------------------|-------------|---------|---------|
-| `NEKO_CORE_API_KEY` | Core API Key (Required) | - | `sk-xxxxx` |
-| `NEKO_CORE_API` | Core API Provider | `qwen` | `qwen`, `openai`, `glm`, `step`, `free` |
-| `NEKO_ASSIST_API` | Assist API Provider | `qwen` | `qwen`, `openai`, `glm`, `step`, `silicon` |
-| `NEKO_ASSIST_API_KEY_QWEN` | Alibaba Cloud API Key | - | `sk-xxxxx` |
-| `NEKO_ASSIST_API_KEY_OPENAI` | OpenAI API Key | - | `sk-xxxxx` |
-| `NEKO_ASSIST_API_KEY_GLM` | Zhipu API Key | - | `xxxxx` |
-| `NEKO_ASSIST_API_KEY_STEP` | StepFun API Key | - | `xxxxx` |
-| `NEKO_ASSIST_API_KEY_SILICON` | SiliconFlow API Key | - | `xxxxx` |
-| `NEKO_MCP_TOKEN` | MCP Router Token | - | `xxxxx` |
-
-#### Server Port Configuration (DO NOT CHANGE!)
-
-| Environment Variable | Description | Default |
-|---------------------|-------------|---------|
-| `NEKO_MAIN_SERVER_PORT` | Main Server Port | `48911` |
-| `NEKO_MEMORY_SERVER_PORT` | Memory Server Port | `48912` |
-| `NEKO_MONITOR_SERVER_PORT` | Monitor Server Port | `48913` |
-| `NEKO_TOOL_SERVER_PORT` | Tool Server Port | `48915` |
-
-#### Model Configuration (Advanced)
-
-| Environment Variable | Description | Default |
-|---------------------|-------------|---------|
-| `NEKO_SUMMARY_MODEL` | Summary Model | `qwen-plus` |
-| `NEKO_CORRECTION_MODEL` | Correction Model | `qwen-max` |
-| `NEKO_EMOTION_MODEL` | Emotion Analysis Model | `qwen-turbo` |
-| `NEKO_VISION_MODEL` | Vision Model | `qwen3-vl-plus-2025-09-23` |
-
 **Note:** The current Docker deployment solution is provided by *HINS*
 
 # Advanced Usage
@@ -195,7 +162,7 @@ When you want to obtain additional features by configuring your own API, you can
 
 - Access `http://localhost:48911/chara_manager` on the web version to enter the character editing page. The default ~~catgirl~~ companion preset name is `小天` (XiaoTian); it's recommended to directly modify the name and add or change basic persona items one by one, but try to limit the quantity.
 
-- Advanced persona settings mainly include **Live2D model settings (live2d)** and **voice settings (voice_id)**. If you want to change the **Live2D model**, first copy the model directory to the `static` folder in this project. You can enter the Live2D model management interface from advanced settings, where you can switch models and adjust their position and size by dragging and scrolling. If you want to change the **character voice**, prepare a continuous, clean voice recording of about 15 seconds. Enter the voice settings page through advanced settings and upload the recording to complete custom voice setup.
+- Advanced persona settings mainly include **Live2D model settings (live2d)** and **voice settings (voice_id)**. If you want to change the **Live2D model**, first copy the model directory to the `static` folder in this project. You can enter the Live2D model management interface from advanced settings, where you can switch models and adjust their position and size by dragging and scrolling. If you want to change the **character voice**, prepare a continuous, clean voice recording of about 5 seconds. Enter the voice settings page through advanced settings and upload the recording to complete custom voice setup.
 
 - Advanced persona also has a `system_prompt` option for complete system instruction customization, but modification is not recommended.
 
