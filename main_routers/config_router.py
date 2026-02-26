@@ -10,19 +10,18 @@ Handles configuration-related API endpoints including:
 """
 
 import json
-import logging
 import os
 
-from pathlib import Path
 from fastapi import APIRouter, Request
 
 from .shared_state import get_config_manager, get_steamworks, get_session_manager, get_initialize_character_data
 from .characters_router import get_current_live2d_model
 from utils.preferences import load_user_preferences, update_model_preferences, validate_model_preferences, move_model_to_top
+from utils.logger_config import get_module_logger
 
 
 router = APIRouter(prefix="/api/config", tags=["config"])
-logger = logging.getLogger("Main")
+logger = get_module_logger(__name__, "Main")
 
 # VRM 模型路径常量
 VRM_STATIC_PATH = "/static/vrm"  # 项目目录下的 VRM 模型路径
@@ -250,6 +249,12 @@ async def get_steam_language():
             print("=" * 60)
             
             logger.info(f"[GeoIP] 用户 IP 国家: {ip_country}, 是否大陆: {is_mainland_china}")
+            # Write back to ConfigManager so URL adjustment uses the same result
+            try:
+                from utils.config_manager import ConfigManager
+                ConfigManager._region_cache = not is_mainland_china
+            except Exception:
+                pass
         except Exception as geo_error:
             print(f"[GeoIP API DEBUG] Exception: {geo_error}")
             logger.warning(f"[GeoIP] 获取用户 IP 国家失败: {geo_error}，默认为非大陆用户")
@@ -338,31 +343,27 @@ async def get_core_config_api():
             "mcpToken": core_cfg.get('mcpToken', ''),  
             "enableCustomApi": core_cfg.get('enableCustomApi', False),  
             # 自定义API相关字段
-            "summaryModelProvider": core_cfg.get('summaryModelProvider', ''),
+            "conversationModelUrl": core_cfg.get('conversationModelUrl', ''),
+            "conversationModelId": core_cfg.get('conversationModelId', ''),
+            "conversationModelApiKey": core_cfg.get('conversationModelApiKey', ''),
             "summaryModelUrl": core_cfg.get('summaryModelUrl', ''),
             "summaryModelId": core_cfg.get('summaryModelId', ''),
             "summaryModelApiKey": core_cfg.get('summaryModelApiKey', ''),
-            "correctionModelProvider": core_cfg.get('correctionModelProvider', ''),
             "correctionModelUrl": core_cfg.get('correctionModelUrl', ''),
             "correctionModelId": core_cfg.get('correctionModelId', ''),
             "correctionModelApiKey": core_cfg.get('correctionModelApiKey', ''),
-            "emotionModelProvider": core_cfg.get('emotionModelProvider', ''),
             "emotionModelUrl": core_cfg.get('emotionModelUrl', ''),
             "emotionModelId": core_cfg.get('emotionModelId', ''),
             "emotionModelApiKey": core_cfg.get('emotionModelApiKey', ''),
-            "visionModelProvider": core_cfg.get('visionModelProvider', ''),
             "visionModelUrl": core_cfg.get('visionModelUrl', ''),
             "visionModelId": core_cfg.get('visionModelId', ''),
             "visionModelApiKey": core_cfg.get('visionModelApiKey', ''),
-            "agentModelProvider": core_cfg.get('agentModelProvider', ''),
             "agentModelUrl": core_cfg.get('agentModelUrl', ''),
             "agentModelId": core_cfg.get('agentModelId', ''),
             "agentModelApiKey": core_cfg.get('agentModelApiKey', ''),
-            "omniModelProvider": core_cfg.get('omniModelProvider', ''),
             "omniModelUrl": core_cfg.get('omniModelUrl', ''),
             "omniModelId": core_cfg.get('omniModelId', ''),
             "omniModelApiKey": core_cfg.get('omniModelApiKey', ''),
-            "ttsModelProvider": core_cfg.get('ttsModelProvider', ''),
             "ttsModelUrl": core_cfg.get('ttsModelUrl', ''),
             "ttsModelId": core_cfg.get('ttsModelId', ''),
             "ttsModelApiKey": core_cfg.get('ttsModelApiKey', ''),
@@ -454,56 +455,55 @@ async def update_core_config(request: Request):
             core_cfg['enableCustomApi'] = data['enableCustomApi']
         
         # 添加用户自定义API配置
-        if 'summaryModelProvider' in data:
-            core_cfg['summaryModelProvider'] = data['summaryModelProvider']
+        if 'conversationModelUrl' in data:
+            core_cfg['conversationModelUrl'] = data['conversationModelUrl']
+        if 'conversationModelId' in data:
+            core_cfg['conversationModelId'] = data['conversationModelId']
+        if 'conversationModelApiKey' in data:
+            core_cfg['conversationModelApiKey'] = data['conversationModelApiKey']
+            
         if 'summaryModelUrl' in data:
             core_cfg['summaryModelUrl'] = data['summaryModelUrl']
         if 'summaryModelId' in data:
             core_cfg['summaryModelId'] = data['summaryModelId']
         if 'summaryModelApiKey' in data:
             core_cfg['summaryModelApiKey'] = data['summaryModelApiKey']
-        if 'correctionModelProvider' in data:
-            core_cfg['correctionModelProvider'] = data['correctionModelProvider']
+            
         if 'correctionModelUrl' in data:
             core_cfg['correctionModelUrl'] = data['correctionModelUrl']
         if 'correctionModelId' in data:
             core_cfg['correctionModelId'] = data['correctionModelId']
         if 'correctionModelApiKey' in data:
             core_cfg['correctionModelApiKey'] = data['correctionModelApiKey']
-        if 'emotionModelProvider' in data:
-            core_cfg['emotionModelProvider'] = data['emotionModelProvider']
+            
         if 'emotionModelUrl' in data:
             core_cfg['emotionModelUrl'] = data['emotionModelUrl']
         if 'emotionModelId' in data:
             core_cfg['emotionModelId'] = data['emotionModelId']
         if 'emotionModelApiKey' in data:
             core_cfg['emotionModelApiKey'] = data['emotionModelApiKey']
-        if 'visionModelProvider' in data:
-            core_cfg['visionModelProvider'] = data['visionModelProvider']
+            
         if 'visionModelUrl' in data:
             core_cfg['visionModelUrl'] = data['visionModelUrl']
         if 'visionModelId' in data:
             core_cfg['visionModelId'] = data['visionModelId']
         if 'visionModelApiKey' in data:
             core_cfg['visionModelApiKey'] = data['visionModelApiKey']
-        if 'agentModelProvider' in data:
-            core_cfg['agentModelProvider'] = data['agentModelProvider']
+            
         if 'agentModelUrl' in data:
             core_cfg['agentModelUrl'] = data['agentModelUrl']
         if 'agentModelId' in data:
             core_cfg['agentModelId'] = data['agentModelId']
         if 'agentModelApiKey' in data:
             core_cfg['agentModelApiKey'] = data['agentModelApiKey']
-        if 'omniModelProvider' in data:
-            core_cfg['omniModelProvider'] = data['omniModelProvider']
+            
         if 'omniModelUrl' in data:
             core_cfg['omniModelUrl'] = data['omniModelUrl']
         if 'omniModelId' in data:
             core_cfg['omniModelId'] = data['omniModelId']
         if 'omniModelApiKey' in data:
             core_cfg['omniModelApiKey'] = data['omniModelApiKey']
-        if 'ttsModelProvider' in data:
-            core_cfg['ttsModelProvider'] = data['ttsModelProvider']
+            
         if 'ttsModelUrl' in data:
             core_cfg['ttsModelUrl'] = data['ttsModelUrl']
         if 'ttsModelId' in data:
@@ -557,6 +557,16 @@ async def update_core_config(request: Request):
             logger.error(f"重新加载配置失败: {reload_error}")
             return {"success": False, "error": f"配置已保存但重新加载失败: {str(reload_error)}"}
         
+        # 4. Notify agent_server to rebuild CUA adapter with fresh config
+        try:
+            import httpx
+            from config import TOOL_SERVER_PORT
+            async with httpx.AsyncClient(timeout=5) as client:
+                await client.post(f"http://127.0.0.1:{TOOL_SERVER_PORT}/notify_config_changed")
+            logger.info("已通知 agent_server 刷新 CUA 适配器")
+        except Exception as notify_err:
+            logger.warning(f"通知 agent_server 刷新 CUA 失败 (非致命): {notify_err}")
+
         logger.info(f"已通知 {notification_count} 个连接的客户端API配置已更新")
         return {"success": True, "message": "API Key已保存并重新加载配置", "sessions_ended": len(sessions_ended)}
     except Exception as e:

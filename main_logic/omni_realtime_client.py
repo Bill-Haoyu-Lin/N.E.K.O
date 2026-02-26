@@ -5,7 +5,6 @@ import websockets
 import json
 import base64
 import time
-import logging
 import numpy as np
 
 from typing import Optional, Callable, Dict, Any, Awaitable
@@ -14,6 +13,7 @@ from config import NATIVE_IMAGE_MIN_INTERVAL, IMAGE_IDLE_RATE_MULTIPLIER
 from utils.config_manager import get_config_manager
 from utils.audio_processor import AudioProcessor
 from utils.frontend_utils import calculate_text_similarity
+from utils.logger_config import get_module_logger
 
 # Gemini Live API SDK
 try:
@@ -25,7 +25,7 @@ except ImportError:
     genai = None
 
 # Setup logger for this module
-logger = logging.getLogger(__name__)
+logger = get_module_logger(__name__, "Main")
 
 class TurnDetectionMode(Enum):
     SERVER_VAD = "server_vad"
@@ -346,7 +346,7 @@ class OmniRealtimeClient:
                 await self.update_session({
                     "instructions": instructions,
                     "modalities": self._modalities ,
-                    "voice": self.voice if self.voice else "Cherry",
+                    "voice": self.voice if self.voice else "Momo",
                     "input_audio_format": "pcm16",
                     "output_audio_format": "pcm16",
                     "input_audio_transcription": {
@@ -836,6 +836,24 @@ class OmniRealtimeClient:
         except Exception as e:
             logger.error(f"Error sending client content to Gemini: {e}")
 
+    async def stream_proactive(self, instruction: str) -> bool:
+        """Proactive delivery stub for voice mode.
+
+        Voice mode proactive delivery is handled by the hot-swap mechanism
+        (pending_extra_replies → _trigger_immediate_preparation_for_extra →
+        _perform_final_swap_sequence).  This method is a placeholder that
+        satisfies the unified OmniClient interface; it always returns False so
+        that LLMSessionManager knows delivery was not performed here and the
+        hot-swap path should be used instead.
+
+        When voice-mode instant proactive delivery is implemented in the future,
+        replace this stub with the actual logic (e.g. create_response with a
+        properly framed system turn).
+        """
+        _ = instruction
+        logger.debug("OmniRealtimeClient.stream_proactive: delegating to hot-swap mechanism")
+        return False
+
     async def cancel_response(self) -> None:
         """Cancel the current response."""
         event = {
@@ -928,24 +946,13 @@ class OmniRealtimeClient:
                         logger.warning(f"⚡ 503 detected, throttling for {self._throttle_duration}s")
                         if self.on_status_message:
                             await self.on_status_message("⚠️ 服务器繁忙，正在自动调节发送速率...")
-                        continue  # 不关闭连接，只进行节流
+                        continue
                     
-                    if '欠费' in error_msg or 'standing' in error_msg:
-                        error_msg = str(event.get('error', ''))
-                        logger.error(f"API Error: {error_msg}")
-                    
-                    # 检测503过载错误，触发backpressure节流
-                    if '503' in error_msg or 'overloaded' in error_msg.lower():
-                        self._is_throttled = True
-                        self._throttle_until = time.time() + self._throttle_duration
-                        logger.warning(f"⚡ 503 detected, throttling for {self._throttle_duration}s")
-                        if self.on_status_message:
-                            await self.on_status_message("⚠️ 服务器繁忙，正在自动调节发送速率...")
-                        continue  # 不关闭连接，只进行节流
-                    
-                    if '欠费' in error_msg or 'standing' in error_msg:
+                    error_msg_lower = error_msg.lower()
+                    if ('欠费' in error_msg or 'standing' in error_msg_lower or 'time limit' in error_msg_lower or
+                        'policy violation' in error_msg_lower or '1008' in error_msg_lower or
+                        '429' in error_msg_lower or 'quota' in error_msg_lower or 'too many' in error_msg_lower):
                         if self.on_connection_error:
-                            await self.on_connection_error(error_msg)
                             await self.on_connection_error(error_msg)
                         await self.close()
                     continue
@@ -1141,6 +1148,10 @@ class OmniRealtimeClient:
                     turn = self._gemini_session.receive()
                     async for response in turn:
                         await self._process_gemini_response(response)
+                    # receive() 是 session 级 async generator，仅在连接断开时退出；
+                    # 正常会话期间此行不会执行。缺失 turn_complete 的兜底已移至
+                    # _process_gemini_response 中基于 model_turn 时间间隔的检测。
+                    self._is_responding = False
                 except asyncio.CancelledError:
                     logger.info("Gemini message handler cancelled")
                     break
@@ -1195,12 +1206,13 @@ class OmniRealtimeClient:
                         await self.on_new_message()
                 
                 # 处理输出转录 - 流式发送每个 chunk 到前端
+                # 不参与新 turn 检测；turn_complete 后到达的迟到转录会以 isNewMessage=false
+                # 追加到当前轮次的气泡（正确行为）
                 if hasattr(server_content, 'output_transcription') and server_content.output_transcription:
                     output_trans = server_content.output_transcription
                     if hasattr(output_trans, 'text') and output_trans.text:
                         text = output_trans.text
                         self._gemini_current_transcript += text
-                        # 流式发送到前端（第一个 chunk 标记 is_first=True）
                         if self.on_text_delta:
                             await self.on_text_delta(text, self._is_first_text_chunk)
                             self._is_first_text_chunk = False
@@ -1218,8 +1230,8 @@ class OmniRealtimeClient:
                                 if self.on_audio_delta:
                                     await self.on_audio_delta(part.inline_data.data)
                 
-                # 检查是否 turn 完成
-                if server_content.turn_complete:
+                # 检查是否 turn 完成（用 getattr 防止 SDK 无该字段时抛错）
+                if getattr(server_content, 'turn_complete', False):
                     self._is_responding = False
                     # 不再调用 on_output_transcript（已通过 on_text_delta 流式发送）
                     if self.on_response_done:

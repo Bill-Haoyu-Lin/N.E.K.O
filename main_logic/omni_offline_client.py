@@ -1,16 +1,16 @@
 # -- coding: utf-8 --
 
 import asyncio
-import logging
 from typing import Optional, Callable, Dict, Any, Awaitable
 from langchain_openai import ChatOpenAI
 from langchain_core.messages import SystemMessage, HumanMessage, AIMessage
 from openai import APIConnectionError, InternalServerError, RateLimitError
 from config import get_extra_body
 from utils.frontend_utils import calculate_text_similarity, count_words_and_chars
+from utils.logger_config import get_module_logger
 
 # Setup logger for this module
-logger = logging.getLogger(__name__)
+logger = get_module_logger(__name__, "Main")
 
 class OmniOfflineClient:
     """
@@ -109,7 +109,7 @@ class OmniOfflineClient:
         
         # ========== 普通对话守卫配置 ==========
         self.enable_response_guard = True     # 是否启用质量守卫
-        self.max_response_length = max_response_length if isinstance(max_response_length, int) and max_response_length > 0 else 200
+        self.max_response_length = max_response_length if isinstance(max_response_length, int) and max_response_length > 0 else 400
         self.max_response_rerolls = 2         # 最多允许的自动重试次数
         
         # 质量守卫回调：由 core.py 设置，用于通知前端清理气泡
@@ -347,7 +347,12 @@ class OmniOfflineClient:
                             guard_attempt += 1
                             reroll_count += 1
                             will_retry = guard_attempt <= self.max_response_rerolls
-                            failure_message = None if will_retry else "AI回复异常，已放弃输出"
+                            # 区分原因：超长用明确提示，其它守卫原因用通用提示
+                            if discard_reason and "length>" in discard_reason:
+                                final_message = "回复过长，已放弃输出（可在配置中调大 TEXT_GUARD_MAX_LENGTH）"
+                            else:
+                                final_message = "AI回复不符合要求，已放弃输出"
+                            failure_message = None if will_retry else final_message
                             await self._notify_response_discarded(
                                 discard_reason or "guard",
                                 guard_attempt,
@@ -362,7 +367,7 @@ class OmniOfflineClient:
                             
                             logger.warning("OmniOfflineClient: guard 重试耗尽，放弃输出")
                             if self.handle_connection_error:
-                                await self.handle_connection_error("AI回复异常，已放弃输出")
+                                await self.handle_connection_error(final_message)
                             assistant_message = ""
                             guard_exhausted = True
                             break
@@ -447,6 +452,57 @@ class OmniOfflineClient:
         if instructions.strip():
             self._conversation_history.append(SystemMessage(content=instructions))
     
+    async def stream_proactive(self, instruction: str) -> bool:
+        """Generate and stream a proactive AI response driven by a system instruction.
+
+        The *instruction* is expected to be pre-formatted by the caller using the
+        ========...======== convention and is injected as a temporary HumanMessage.
+        It is **not** persisted to _conversation_history.  Only the AI's
+        natural-language response (AIMessage) is kept in history.
+
+        Calls on_response_done() when finished (same as stream_text).
+        Returns True if any text was generated, False if aborted or empty.
+        """
+        if not instruction or not instruction.strip():
+            return False
+
+        # 临时注入：instruction 已由调用方用 ======== 格式封装，作为 HumanMessage 发送，
+        # 不持久化到 _conversation_history，避免污染长期上下文。
+        messages_to_send = (
+            self._conversation_history
+            + [HumanMessage(content=instruction)]
+        )
+
+        assistant_message = ""
+        is_first_chunk = True
+
+        try:
+            self._is_responding = True
+            async for chunk in self.llm.astream(messages_to_send):
+                if not self._is_responding:
+                    break
+                content = chunk.content if hasattr(chunk, "content") else str(chunk)
+                if content and content.strip():
+                    assistant_message += content
+                    if self.on_text_delta:
+                        await self.on_text_delta(content, is_first_chunk)
+                    is_first_chunk = False
+        except Exception as e:
+            error_msg = f"OmniOfflineClient.stream_proactive error: {e}"
+            logger.error(error_msg)
+            if self.handle_connection_error:
+                await self.handle_connection_error(error_msg)
+            assistant_message = ""  # 防止残缺内容被 finally 写入历史
+            return False
+        finally:
+            self._is_responding = False
+            if assistant_message:
+                self._conversation_history.append(AIMessage(content=assistant_message))
+            if self.on_response_done:
+                await self.on_response_done()
+
+        return bool(assistant_message)
+
     async def cancel_response(self) -> None:
         """Cancel the current response if possible"""
         self._is_responding = False
