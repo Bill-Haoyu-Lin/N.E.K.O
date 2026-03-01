@@ -1095,6 +1095,7 @@
         "profileName": "Profile Name",
         "profileNameMaxHint": "Max 20 characters",
         "profileNameTooLong": "Profile name is too long",
+        "profileNameContainsSlash": "Profile name cannot contain path separators (/ or \\)",
         "newProfileNameRequired": "New profile name cannot be empty",
         "newProfileNameTooLong": "Profile name is too long",
         "required": "*",
@@ -1111,6 +1112,7 @@
         "lightingNotSet": "Default",
         "live2dNotSet": "Not Set",
         "voiceNotSet": "No Voice Specified",
+        "voiceSetting": "Voice Settings",
         "manageModel": "Click to manage model",
         "fillProfileNameFirst": "Please fill in the neko profile name first, then set the model",
         "registerNewVoice": "Register New Voice",
@@ -1345,6 +1347,7 @@
             "connectivityCheck": "Agent LLM connectivity check in progress..."
         },
         "quotaExceeded": "The free Agent model daily trial limit has been reached ({{limit}} uses). Please try again tomorrow.",
+        "contentFilterError": "The web page content browsed by Agent was rejected by the AI model's safety filter and the task has been aborted. This usually happens when the page contains sensitive topics. Please try different keywords or websites.",
         "taskHud": {
             "title": "Agent Tasks",
             "running": "Running",
