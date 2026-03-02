@@ -8890,16 +8890,46 @@ function init_app() {
         }
     }
 
-    // 主动搭话截图函数（前端 getDisplayMedia → 后端 pyautogui 兜底）
+    // 主动搭话截图函数（优先后端 pyautogui 静默截图 → 前端 getDisplayMedia 缓存流复用）
     async function captureProactiveChatScreenshot() {
-        // 策略1: 前端 getDisplayMedia
+        // 策略1: 后端 pyautogui 优先（本地运行时完全静默，无弹窗）
+        const backendDataUrl = await fetchBackendScreenshot();
+        if (backendDataUrl) {
+            console.log('[主动搭话截图] 后端截图成功');
+            return backendDataUrl;
+        }
+
+        // 策略2: 前端 getDisplayMedia（远程服务器等后端不可用时的备选）
+        // 复用缓存的 screenCaptureStream，仅在无有效流时才请求新流
         if (navigator.mediaDevices && navigator.mediaDevices.getDisplayMedia) {
-            let captureStream = null;
             try {
-                captureStream = await navigator.mediaDevices.getDisplayMedia({
-                    video: { cursor: 'always' },
-                    audio: false,
-                });
+                let captureStream = screenCaptureStream;
+
+                if (!captureStream || !captureStream.active) {
+                    captureStream = await navigator.mediaDevices.getDisplayMedia({
+                        video: { cursor: 'always', frameRate: { max: 1 } },
+                        audio: false,
+                    });
+
+                    screenCaptureStream = captureStream;
+
+                    captureStream.getVideoTracks().forEach(track => {
+                        track.addEventListener('ended', () => {
+                            console.log('[ProactiveVision] 屏幕共享流被用户终止');
+                            if (screenCaptureStream === captureStream) {
+                                screenCaptureStream = null;
+                                screenCaptureStreamLastUsed = null;
+                                if (screenCaptureStreamIdleTimer) {
+                                    clearTimeout(screenCaptureStreamIdleTimer);
+                                    screenCaptureStreamIdleTimer = null;
+                                }
+                            }
+                        });
+                    });
+                }
+
+                screenCaptureStreamLastUsed = Date.now();
+                scheduleScreenCaptureIdleCheck();
 
                 const video = document.createElement('video');
                 video.srcObject = captureStream;
@@ -8911,22 +8941,11 @@ function init_app() {
                 video.srcObject = null;
                 video.remove();
 
-                console.log(`主动搭话截图成功，尺寸: ${width}x${height}`);
+                console.log(`[主动搭话截图] 前端截图成功（流已缓存），尺寸: ${width}x${height}`);
                 return dataUrl;
             } catch (err) {
-                console.warn('[主动搭话截图] getDisplayMedia 失败，尝试后端兜底:', err);
-            } finally {
-                if (captureStream) {
-                    captureStream.getTracks().forEach(track => track.stop());
-                }
+                console.warn('[主动搭话截图] getDisplayMedia 失败:', err);
             }
-        }
-
-        // 策略2: 后端 pyautogui 兜底
-        const backendDataUrl = await fetchBackendScreenshot();
-        if (backendDataUrl) {
-            console.log('[主动搭话截图] 后端兜底截图成功');
-            return backendDataUrl;
         }
 
         console.warn('[主动搭话截图] 所有截图方式均失败');
